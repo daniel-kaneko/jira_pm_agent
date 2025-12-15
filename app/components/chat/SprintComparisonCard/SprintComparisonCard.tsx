@@ -59,15 +59,9 @@ interface SprintColumnProps {
   data: ProcessedSprint;
   isExpanded: boolean;
   search: string;
-  columnCount: number;
 }
 
-function SprintColumn({
-  data,
-  isExpanded,
-  search,
-  columnCount,
-}: SprintColumnProps) {
+function SprintColumn({ data, isExpanded, search }: SprintColumnProps) {
   const displayedIssues = isExpanded
     ? data.issues
     : data.issues.slice(0, PREVIEW_COUNT);
@@ -87,11 +81,8 @@ function SprintColumn({
     );
   };
 
-  const columnClass =
-    columnCount >= 3 ? "flex-shrink-0 w-64" : "flex-1 min-w-[200px]";
-
   return (
-    <div className={`${columnClass} flex flex-col`}>
+    <div className="flex-1 min-w-[200px] flex flex-col">
       <div className="bg-[var(--bg-highlight)] px-3 py-2 border-b border-[var(--bg)]">
         <div className="font-medium text-[var(--fg)] text-sm truncate">
           {data.sprint_name}
@@ -320,7 +311,7 @@ export function SprintComparisonCard({ sprints }: SprintComparisonCardProps) {
         </div>
       )}
 
-      <div className={processedSprints.length >= 3 ? "overflow-x-auto" : ""}>
+      <div className="overflow-x-auto">
         <div className="flex divide-x divide-[var(--bg-highlight)]">
           {processedSprints.map((sprint) => (
             <SprintColumn
@@ -328,7 +319,6 @@ export function SprintComparisonCard({ sprints }: SprintComparisonCardProps) {
               data={sprint}
               isExpanded={isExpanded}
               search={search}
-              columnCount={processedSprints.length}
             />
           ))}
         </div>

@@ -110,7 +110,12 @@ export default function Home() {
                 (reasoning.length > 0 ? (
                   <ReasoningDisplay steps={reasoning} />
                 ) : (
-                  <TypingIndicator />
+                  <div className="py-2 border-b border-[var(--bg-highlight)]">
+                    <div className="flex gap-3">
+                      <span className="text-[var(--green)]">λ</span>
+                      <TypingIndicator />
+                    </div>
+                  </div>
                 ))}
               <div ref={messagesEndRef} />
             </div>

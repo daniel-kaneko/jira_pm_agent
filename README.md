@@ -114,21 +114,6 @@ When the AI returns issue data, it's displayed in interactive tables with:
 
 For sprint comparisons, issues are displayed in side-by-side columns with synchronized controls.
 
-## Example Queries
-
-```
-Which is the current sprint?
-Who are the team members?
-How many tasks did Daniel and Jorge get done in Sprint 24?
-What about Sprint 23?
-Compare sprints 22, 23, and 24
-Which sprint had the most story points?
-Can you summarize what was done on Sprint 24?
-What is being currently worked on?
-List all tasks in UI Review status
-Can you look for the comments of task ODPP-1097?
-```
-
 ## Available Scripts
 
 | Script       | Description              |

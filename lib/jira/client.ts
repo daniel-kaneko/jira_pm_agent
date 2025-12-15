@@ -210,9 +210,9 @@ export const jiraClient = {
       story_points: (fields.customfield_10023 as number) || null,
       issue_type: (fields.issuetype as Record<string, unknown>)?.name as string,
       comments: comments.map((comment) => ({
-        author: ((c.author as Record<string, unknown>)?.displayName as string) || "Unknown",
-        body: extractTextFromAdf(c.body),
-        created: c.created as string,
+        author: ((comment.author as Record<string, unknown>)?.displayName as string) || "Unknown",
+        body: extractTextFromAdf(comment.body),
+        created: comment.created as string,
       })),
     };
   },

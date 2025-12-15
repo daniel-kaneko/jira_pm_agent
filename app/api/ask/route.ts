@@ -3,7 +3,6 @@ import { chatWithTools, streamChat } from "@/lib/ollama";
 import { jiraTools } from "@/lib/jira";
 import { generateSystemPrompt, MAX_TOOL_ITERATIONS } from "@/lib/jira/prompts";
 import { getCachedData } from "@/lib/jira/cache";
-import { JIRA_CONFIG } from "@/lib/constants";
 import type {
   AskRequest,
   StreamEvent,
@@ -11,21 +10,39 @@ import type {
   ChatMessage,
 } from "@/lib/types";
 
+/**
+ * Calls a Jira tool via the internal API endpoint, forwarding authentication cookies.
+ * @param toolName - The name of the tool to execute.
+ * @param toolArgs - Arguments to pass to the tool.
+ * @param cookieHeader - The cookie header from the original request for authentication.
+ * @returns The result from the tool execution.
+ */
 async function callTool(
   toolName: string,
-  toolArgs: Record<string, unknown>
+  toolArgs: Record<string, unknown>,
+  cookieHeader: string
 ): Promise<unknown> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
   const response = await fetch(`${baseUrl}/api/jira/tools`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: cookieHeader,
+    },
     body: JSON.stringify({ tool: toolName, arguments: toolArgs }),
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || `Tool call failed: ${response.status}`);
+    const text = await response.text();
+    let errorMessage: string;
+    try {
+      const error = JSON.parse(text);
+      errorMessage = error.error || `Tool call failed: ${response.status}`;
+    } catch {
+      errorMessage = `Tool call failed: ${response.status} - ${text}`;
+    }
+    throw new Error(errorMessage);
   }
 
   const data: ToolResponse = await response.json();
@@ -267,7 +284,8 @@ function createSSEStream(
 }
 
 async function* orchestrate(
-  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
+  cookieHeader: string
 ): AsyncGenerator<StreamEvent> {
   const cachedData = await getCachedData();
   const systemPrompt = generateSystemPrompt(
@@ -327,7 +345,7 @@ async function* orchestrate(
     };
 
     try {
-      const toolResult = await callTool(toolName, toolArgs);
+      const toolResult = await callTool(toolName, toolArgs, cookieHeader);
       const resultSummary = summarizeToolResult(toolName, toolResult);
 
       yield {
@@ -475,8 +493,10 @@ export async function POST(request: NextRequest): Promise<Response> {
       });
     }
 
+    const cookieHeader = request.headers.get("cookie") || "";
+
     if (stream) {
-      const generator = orchestrate(messages);
+      const generator = orchestrate(messages, cookieHeader);
       const sseStream = createSSEStream(generator);
 
       return new Response(sseStream, {
@@ -491,7 +511,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     let finalContent = "";
     const reasoning: string[] = [];
 
-    for await (const event of orchestrate(messages)) {
+    for await (const event of orchestrate(messages, cookieHeader)) {
       if (event.type === "chunk" && event.content) {
         finalContent += event.content;
       } else if (event.type === "reasoning" && event.content) {

@@ -20,7 +20,7 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 ## Tech Stack
 
 - **Frontend**: Next.js 15, React 19, Tailwind CSS 4
-- **AI/ML**: Groq (llama-3.3-70b-versatile)
+- **AI/ML**: Groq or self-hosted Ollama (llama-3.3-70b / qwen2.5:7b)
 - **Integration**: Jira REST API v3
 - **Styling**: JetBrains Mono font, 10 themes
 
@@ -31,7 +31,9 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 - Node.js 20+
 - pnpm
 - Jira Cloud account with API access
-- Groq API key (free at [console.groq.com](https://console.groq.com))
+- **Either**:
+  - Groq API key (free at [console.groq.com](https://console.groq.com)), **or**
+  - Self-hosted Ollama (see [ollama-secure-tunnel](../ollama-secure-tunnel/))
 
 ### Installation
 
@@ -47,10 +49,10 @@ pnpm install
 Create a `.env.local` file:
 
 ```env
+# Jira Configuration
 JIRA_BASE_URL=https://your-domain.atlassian.net
 JIRA_EMAIL=your-email@company.com
 JIRA_API_TOKEN=your-api-token-here
-GROQ_API_KEY=gsk_your_groq_api_key
 
 # Required: Set your board ID so the AI focuses on your project
 DEFAULT_BOARD_ID=123
@@ -58,6 +60,18 @@ DEFAULT_BOARD_ID=123
 # Authentication (defaults to admin/admin if not set)
 AUTH_USERNAME=your-username
 AUTH_PASSWORD=your-password
+
+# LLM Provider: "groq" (default) or "ollama"
+LLM_PROVIDER=groq
+
+# --- Option A: Groq (cloud) ---
+GROQ_API_KEY=gsk_your_groq_api_key
+
+# --- Option B: Ollama (self-hosted) ---
+# OLLAMA_BASE_URL=https://ollama.your-domain.com
+# OLLAMA_MODEL=qwen2.5:7b
+# OLLAMA_AUTH_USER=ollama
+# OLLAMA_AUTH_PASS=your_password
 ```
 
 To get your Jira API token:
@@ -231,9 +245,24 @@ vercel
 | `JIRA_EMAIL`         | Your Jira email                     |
 | `JIRA_API_TOKEN`     | Your Jira API token                 |
 | `DEFAULT_BOARD_ID`   | Your board ID                       |
-| `GROQ_API_KEY`       | Your Groq API key                   |
 | `AUTH_USERNAME`      | Login username                      |
 | `AUTH_PASSWORD_HASH` | Bcrypt hash of password             |
+| `LLM_PROVIDER`       | `groq` or `ollama`                  |
+
+**For Groq:**
+
+| Variable       | Value             |
+| -------------- | ----------------- |
+| `GROQ_API_KEY` | Your Groq API key |
+
+**For Ollama (self-hosted):**
+
+| Variable           | Value                              |
+| ------------------ | ---------------------------------- |
+| `OLLAMA_BASE_URL`  | `https://ollama.your-domain.com`   |
+| `OLLAMA_MODEL`     | `qwen2.5:7b` (or other model)      |
+| `OLLAMA_AUTH_USER` | Basic auth username                |
+| `OLLAMA_AUTH_PASS` | Basic auth password                |
 
 3. **Redeploy** after setting environment variables.
 

@@ -10,7 +10,7 @@
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:services": "docker compose up -d chroma ollama",
-    "docker:ollama:pull": "docker compose exec ollama ollama pull llama3.2:3b"
+    "docker:ollama:pull": "docker compose exec ollama ollama pull qwen2.5:7b"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

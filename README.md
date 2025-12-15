@@ -20,7 +20,7 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 ## Tech Stack
 
 - **Frontend**: Next.js 15, React 19, Tailwind CSS 4
-- **AI/ML**: Groq or self-hosted Ollama (llama-3.3-70b / qwen2.5:7b)
+- **AI/ML**: Ollama (qwen2.5:7b or other models)
 - **Integration**: Jira REST API v3
 - **Styling**: JetBrains Mono font, 10 themes
 
@@ -31,9 +31,7 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 - Node.js 20+
 - pnpm
 - Jira Cloud account with API access
-- **Either**:
-  - Groq API key (free at [console.groq.com](https://console.groq.com)), **or**
-  - Self-hosted Ollama (see [ollama-secure-tunnel](../ollama-secure-tunnel/))
+- Ollama instance (local or self-hosted)
 
 ### Installation
 
@@ -61,15 +59,11 @@ DEFAULT_BOARD_ID=123
 AUTH_USERNAME=your-username
 AUTH_PASSWORD=your-password
 
-# LLM Provider: "groq" (default) or "ollama"
-LLM_PROVIDER=groq
+# Ollama Configuration
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
 
-# --- Option A: Groq (cloud) ---
-GROQ_API_KEY=gsk_your_groq_api_key
-
-# --- Option B: Ollama (self-hosted) ---
-# OLLAMA_BASE_URL=https://ollama.your-domain.com
-# OLLAMA_MODEL=qwen2.5:7b
+# Optional: Basic auth for remote Ollama
 # OLLAMA_AUTH_USER=ollama
 # OLLAMA_AUTH_PASS=your_password
 ```
@@ -247,22 +241,10 @@ vercel
 | `DEFAULT_BOARD_ID`   | Your board ID                       |
 | `AUTH_USERNAME`      | Login username                      |
 | `AUTH_PASSWORD_HASH` | Bcrypt hash of password             |
-| `LLM_PROVIDER`       | `groq` or `ollama`                  |
-
-**For Groq:**
-
-| Variable       | Value             |
-| -------------- | ----------------- |
-| `GROQ_API_KEY` | Your Groq API key |
-
-**For Ollama (self-hosted):**
-
-| Variable           | Value                              |
-| ------------------ | ---------------------------------- |
-| `OLLAMA_BASE_URL`  | `https://ollama.your-domain.com`   |
-| `OLLAMA_MODEL`     | `qwen2.5:7b` (or other model)      |
-| `OLLAMA_AUTH_USER` | Basic auth username                |
-| `OLLAMA_AUTH_PASS` | Basic auth password                |
+| `OLLAMA_BASE_URL`    | `https://ollama.your-domain.com`    |
+| `OLLAMA_MODEL`       | `qwen2.5:7b` (or other model)       |
+| `OLLAMA_AUTH_USER`   | Basic auth username (if needed)     |
+| `OLLAMA_AUTH_PASS`   | Basic auth password (if needed)     |
 
 3. **Redeploy** after setting environment variables.
 

@@ -4,6 +4,7 @@ import type {
   JiraSprintIssues,
   CreateIssueParams,
   CreatedIssue,
+  UpdateIssueParams,
   JiraField,
 } from "./types";
 
@@ -85,11 +86,12 @@ async function jiraFetch<T>(
       errorDetails = errorBody.slice(0, 200);
     }
     throw new Error(
-      `Jira API error: ${response.status} ${response.statusText}${errorDetails ? ` - ${errorDetails}` : ""}`
+      `Jira API error: ${response.status} ${response.statusText}${
+        errorDetails ? ` - ${errorDetails}` : ""
+      }`
     );
   }
 
-  // Handle empty responses (e.g., 204 No Content)
   const contentLength = response.headers.get("content-length");
   if (response.status === 204 || contentLength === "0") {
     return {} as T;
@@ -152,7 +154,6 @@ export const jiraClient = {
     let startAt = 0;
     const maxResults = 100;
 
-    // Build fields list dynamically
     const fieldsList = ["summary", "status", "issuetype", "assignee"];
     if (storyPointsFieldId) {
       fieldsList.push(storyPointsFieldId);
@@ -160,7 +161,9 @@ export const jiraClient = {
 
     while (true) {
       const data = await jiraFetch<Record<string, unknown>>(
-        `/rest/agile/1.0/sprint/${sprintId}/issue?fields=${fieldsList.join(",")}&maxResults=${maxResults}&startAt=${startAt}`
+        `/rest/agile/1.0/sprint/${sprintId}/issue?fields=${fieldsList.join(
+          ","
+        )}&maxResults=${maxResults}&startAt=${startAt}`
       );
 
       const issues = (data.issues as Array<Record<string, unknown>>) || [];
@@ -187,7 +190,6 @@ export const jiraClient = {
 
       const assigneeData = fields.assignee as Record<string, unknown> | null;
 
-      // Get story points from dynamic field
       const storyPoints = storyPointsFieldId
         ? (fields[storyPointsFieldId] as number) || null
         : null;
@@ -226,7 +228,6 @@ export const jiraClient = {
     issue_type: string;
     comments: Array<{ author: string; body: string; created: string }>;
   }> {
-    // Build fields list dynamically
     const fieldsList = [
       "summary",
       "description",
@@ -251,7 +252,6 @@ export const jiraClient = {
 
     const description = extractTextFromAdf(fields.description) || null;
 
-    // Get story points from dynamic field
     const storyPoints = storyPointsFieldId
       ? (fields[storyPointsFieldId] as number) || null
       : null;
@@ -329,6 +329,57 @@ export const jiraClient = {
       self: data.self as string,
       url: `${JIRA_BASE_URL}/browse/${data.key}`,
     };
+  },
+
+  /**
+   * Update an existing issue in Jira.
+   * @param params - The issue update parameters.
+   */
+  async updateIssue(params: UpdateIssueParams): Promise<void> {
+    const {
+      issueKey,
+      summary,
+      description,
+      assigneeEmail,
+      storyPoints,
+      storyPointsFieldId,
+    } = params;
+
+    const fields: Record<string, unknown> = {};
+
+    if (summary !== undefined) {
+      fields.summary = summary;
+    }
+
+    if (description !== undefined) {
+      fields.description = {
+        type: "doc",
+        version: 1,
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: description }],
+          },
+        ],
+      };
+    }
+
+    if (assigneeEmail !== undefined) {
+      fields.assignee = { id: await this.getAccountIdByEmail(assigneeEmail) };
+    }
+
+    if (storyPoints !== undefined && storyPointsFieldId) {
+      fields[storyPointsFieldId] = storyPoints;
+    }
+
+    if (Object.keys(fields).length === 0) {
+      return;
+    }
+
+    await jiraFetch(`/rest/api/3/issue/${issueKey}`, {
+      method: "PUT",
+      body: JSON.stringify({ fields }),
+    });
   },
 
   /**

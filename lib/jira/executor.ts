@@ -12,7 +12,7 @@ import type { ToolCallInput } from "../types";
 type PrepareSearchResult = ToolResultMap["prepare_search"];
 type GetSprintIssuesResult = ToolResultMap["get_sprint_issues"];
 type GetIssueResult = ToolResultMap["get_issue"];
-type CreateIssueResult = ToolResultMap["create_issue"];
+type ManageIssueResult = ToolResultMap["manage_issue"];
 
 interface ResolveNameOptions {
   strict?: boolean;
@@ -56,12 +56,16 @@ function resolveName(
   if (options?.strict) {
     if (matches.length === 0) {
       throw new Error(
-        `"${input}" not found in team. Available: ${cachedTeam.map((m) => m.name).join(", ")}`
+        `"${input}" not found in team. Available: ${cachedTeam
+          .map((m) => m.name)
+          .join(", ")}`
       );
     }
     if (matches.length > 1) {
       throw new Error(
-        `Multiple matches for "${input}": ${matches.map((m) => m.name).join(", ")}. Be more specific.`
+        `Multiple matches for "${input}": ${matches
+          .map((m) => m.name)
+          .join(", ")}. Be more specific.`
       );
     }
   }
@@ -81,7 +85,9 @@ function validateSprintIds(
   const invalidIds = sprintIds.filter((id) => !validIds.includes(id));
   if (invalidIds.length > 0) {
     throw new Error(
-      `Invalid sprint IDs: ${invalidIds.join(", ")}. Use IDs from AVAILABLE SPRINTS.`
+      `Invalid sprint IDs: ${invalidIds.join(
+        ", "
+      )}. Use IDs from AVAILABLE SPRINTS.`
     );
   }
 }
@@ -112,7 +118,10 @@ const createKeywordFilter =
   (issue) =>
     issue.summary.toLowerCase().includes(keyword.toLowerCase());
 
-function applyFilters<T>(items: T[], filters: Array<IssueFilter<T> | null>): T[] {
+function applyFilters<T>(
+  items: T[],
+  filters: Array<IssueFilter<T> | null>
+): T[] {
   return filters
     .filter((f): f is IssueFilter<T> => f !== null)
     .reduce((acc, filter) => acc.filter(filter), items);
@@ -303,9 +312,55 @@ async function handleGetIssue(
   return jiraClient.getIssue(issue_key, storyPointsFieldId);
 }
 
-async function handleCreateIssue(
+/**
+ * Transition an issue to a target status if specified and not already there.
+ */
+async function transitionIfNeeded(
+  issueKey: string,
+  targetStatus: string | undefined,
+  currentStatus?: string
+): Promise<string> {
+  if (!targetStatus) return currentStatus || "Backlog";
+
+  const statusLower = targetStatus.toLowerCase();
+  if (statusLower === "backlog") return "Backlog";
+  if (currentStatus?.toLowerCase() === statusLower) return currentStatus;
+
+  const transitions = await jiraClient.getTransitions(issueKey);
+  const match = transitions.find((t) => t.name.toLowerCase() === statusLower);
+
+  if (!match) {
+    throw new Error(
+      `Cannot transition to "${targetStatus}". Available: ${transitions
+        .map((t) => t.name)
+        .join(", ")}`
+    );
+  }
+
+  await jiraClient.transitionIssue(issueKey, match.id);
+  return match.name;
+}
+
+/**
+ * Move issue to sprint if specified.
+ */
+async function moveToSprintIfNeeded(
+  issueKey: string,
+  sprintId: number | undefined,
+  boardId: number
+): Promise<string | null> {
+  if (!sprintId) return null;
+
+  await jiraClient.moveIssuesToSprint(sprintId, [issueKey]);
+  const sprints = await jiraClient.listSprints(boardId, "all", 50);
+  const sprint = sprints.find((s) => s.id === sprintId);
+  return sprint?.name || `Sprint ${sprintId}`;
+}
+
+async function handleManageIssue(
   args: Record<string, unknown>
-): Promise<CreateIssueResult> {
+): Promise<ManageIssueResult> {
+  const issue_key = args.issue_key as string | undefined;
   const summary = args.summary as string | undefined;
   const description = args.description as string | undefined;
   const issue_type = (args.issue_type as string | undefined) || "Story";
@@ -313,10 +368,6 @@ async function handleCreateIssue(
   const sprint_id = args.sprint_id as number | undefined;
   const story_points = args.story_points as number | undefined;
   const status = args.status as string | undefined;
-
-  if (!summary) {
-    throw new Error("summary is required");
-  }
 
   if (!JIRA_CONFIG.boardId) {
     throw new Error("DEFAULT_BOARD_ID not configured in environment");
@@ -332,6 +383,51 @@ async function handleCreateIssue(
     ? resolveName(assignee, cachedTeam, { strict: true })
     : undefined;
 
+  const isUpdate = !!issue_key;
+
+  if (isUpdate) {
+    const existingIssue = await jiraClient.getIssue(
+      issue_key,
+      storyPointsFieldId
+    );
+
+    await jiraClient.updateIssue({
+      issueKey: issue_key,
+      summary,
+      description,
+      assigneeEmail,
+      storyPoints: story_points,
+      storyPointsFieldId,
+    });
+
+    const sprintName = await moveToSprintIfNeeded(
+      issue_key,
+      sprint_id,
+      JIRA_CONFIG.boardId
+    );
+    const finalStatus = await transitionIfNeeded(
+      issue_key,
+      status,
+      existingIssue.status
+    );
+
+    return {
+      action: "updated",
+      key: issue_key,
+      url: `${JIRA_CONFIG.baseUrl}/browse/${issue_key}`,
+      summary: summary || existingIssue.summary,
+      issue_type: existingIssue.issue_type,
+      assignee: assigneeEmail || existingIssue.assignee,
+      sprint: sprintName,
+      story_points: story_points ?? existingIssue.story_points,
+      status: finalStatus,
+    };
+  }
+
+  if (!summary) {
+    throw new Error("summary is required for creating new issues");
+  }
+
   const createdIssue = await jiraClient.createIssue({
     projectKey: boardInfo.project_key,
     summary,
@@ -342,46 +438,15 @@ async function handleCreateIssue(
     storyPointsFieldId,
   });
 
-  // Add to sprint if specified
-  let sprintName: string | null = null;
-  if (sprint_id) {
-    await jiraClient.moveIssuesToSprint(sprint_id, [createdIssue.key]);
-    const sprints = await jiraClient.listSprints(
-      JIRA_CONFIG.boardId,
-      "all",
-      50
-    );
-    const sprint = sprints.find((s) => s.id === sprint_id);
-    sprintName = sprint?.name || `Sprint ${sprint_id}`;
-  }
-
-  // Transition to target status if specified
-  let finalStatus = "Backlog";
-  if (status) {
-    const statusLower = status.toLowerCase();
-
-    if (statusLower !== "backlog") {
-      const transitions = await jiraClient.getTransitions(createdIssue.key);
-      const matchingTransition = transitions.find(
-        (t) => t.name.toLowerCase() === statusLower
-      );
-
-      if (matchingTransition) {
-        await jiraClient.transitionIssue(
-          createdIssue.key,
-          matchingTransition.id
-        );
-        finalStatus = matchingTransition.name;
-      } else {
-        const availableStatuses = transitions.map((t) => t.name).join(", ");
-        throw new Error(
-          `Cannot transition to "${status}". Available transitions: ${availableStatuses}`
-        );
-      }
-    }
-  }
+  const sprintName = await moveToSprintIfNeeded(
+    createdIssue.key,
+    sprint_id,
+    JIRA_CONFIG.boardId
+  );
+  const finalStatus = await transitionIfNeeded(createdIssue.key, status);
 
   return {
+    action: "created",
     key: createdIssue.key,
     url: createdIssue.url,
     summary,
@@ -399,7 +464,7 @@ export async function executeJiraTool(
   | PrepareSearchResult
   | GetSprintIssuesResult
   | GetIssueResult
-  | CreateIssueResult
+  | ManageIssueResult
 > {
   const { name, arguments: args } = toolCall;
 
@@ -413,8 +478,8 @@ export async function executeJiraTool(
     case "get_issue":
       return handleGetIssue(args);
 
-    case "create_issue":
-      return handleCreateIssue(args);
+    case "manage_issue":
+      return handleManageIssue(args);
 
     default:
       throw new Error(`Unknown tool: ${name}`);
@@ -426,7 +491,7 @@ export function isValidToolName(name: string): name is ToolName {
     "prepare_search",
     "get_sprint_issues",
     "get_issue",
-    "create_issue",
+    "manage_issue",
   ];
   return validTools.includes(name as ToolName);
 }

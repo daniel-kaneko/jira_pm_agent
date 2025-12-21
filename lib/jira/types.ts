@@ -72,6 +72,15 @@ export interface CreatedIssue {
   url: string;
 }
 
+export interface UpdateIssueParams {
+  issueKey: string;
+  summary?: string;
+  description?: string;
+  assigneeEmail?: string;
+  storyPoints?: number;
+  storyPointsFieldId?: string | null;
+}
+
 export interface JiraField {
   id: string;
   name: string;
@@ -136,8 +145,9 @@ export interface GetIssueArgs {
   issue_key: string;
 }
 
-export interface CreateIssueArgs {
-  summary: string;
+export interface ManageIssueArgs {
+  issue_key?: string;
+  summary?: string;
   description?: string;
   issue_type?: string;
   assignee?: string;
@@ -150,7 +160,7 @@ export type ToolArgsMap = {
   prepare_search: PrepareSearchArgs;
   get_sprint_issues: GetSprintIssuesArgs;
   get_issue: GetIssueArgs;
-  create_issue: CreateIssueArgs;
+  manage_issue: ManageIssueArgs;
 };
 
 export interface ToolCall<T extends ToolName = ToolName> {
@@ -206,7 +216,8 @@ export type ToolResultMap = {
     issue_type: string;
     comments: Array<{ author: string; body: string; created: string }>;
   };
-  create_issue: {
+  manage_issue: {
+    action: "created" | "updated";
     key: string;
     url: string;
     summary: string;

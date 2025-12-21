@@ -1,7 +1,6 @@
 import { ToolDefinition } from "./jira/types";
 import type { ChatMessage, OllamaResponse, ToolCall } from "./types";
 
-// Ollama configuration
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:7b";
 const OLLAMA_AUTH_USER = process.env.OLLAMA_AUTH_USER;
@@ -67,7 +66,9 @@ export async function chatWithTools(
   const data = await response.json();
 
   const toolCalls: ToolCall[] | undefined = data.message?.tool_calls?.map(
-    (tc: { function: { name: string; arguments: Record<string, unknown> } }) => ({
+    (tc: {
+      function: { name: string; arguments: Record<string, unknown> };
+    }) => ({
       function: {
         name: tc.function.name,
         arguments: tc.function.arguments,
@@ -136,7 +137,7 @@ export async function* streamChat(
           }
           if (parsed.done) return;
         } catch {
-          // Skip invalid JSON
+          console.error("Error parsing JSON:", line);
         }
       }
     }

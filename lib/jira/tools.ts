@@ -4,7 +4,7 @@ export const TOOL_NAMES = [
   "prepare_search",
   "get_sprint_issues",
   "get_issue",
-  "create_issue",
+  "manage_issue",
 ] as const;
 
 export const jiraTools: ToolDefinition[] = [
@@ -104,21 +104,29 @@ Returns: { key, summary, description, status, assignee, comments: [...] }`,
   {
     type: "function",
     function: {
-      name: "create_issue",
-      description: `Create a new issue in Jira. ONLY call this AFTER user confirms.
+      name: "manage_issue",
+      description: `Create or update a Jira issue. ONLY call this AFTER user confirms.
+
+Mode: If issue_key is provided → UPDATE existing issue. Otherwise → CREATE new issue.
 
 Examples:
-- create_issue(summary: "Add cart badge feature") - basic story
-- create_issue(summary: "Login broken", issue_type: "Bug", assignee: "Daniel") - bug with assignee
-- create_issue(summary: "User authentication", sprint_id: 9887, story_points: 5) - story with sprint and points
+- manage_issue(summary: "Add cart badge") - create new story
+- manage_issue(issue_key: "PROJ-123", status: "Done") - update status
+- manage_issue(issue_key: "PROJ-123", assignee: "Daniel", story_points: 5) - update assignee and points
 
 Returns: { key, url, summary, issue_type, assignee, sprint, story_points, status }`,
       parameters: {
         type: "object",
         properties: {
+          issue_key: {
+            type: "string",
+            description:
+              "Issue key to update (e.g. 'PROJ-123'). Omit to create new issue.",
+          },
           summary: {
             type: "string",
-            description: "The issue title/summary (required)",
+            description:
+              "Issue title/summary (required for create, optional for update)",
           },
           description: {
             type: "string",
@@ -126,7 +134,7 @@ Returns: { key, url, summary, issue_type, assignee, sprint, story_points, status
           },
           issue_type: {
             type: "string",
-            description: "Issue type: Story (default) or Bug",
+            description: "Issue type: Story (default) or Bug (create only)",
           },
           assignee: {
             type: "string",
@@ -134,8 +142,7 @@ Returns: { key, url, summary, issue_type, assignee, sprint, story_points, status
           },
           sprint_id: {
             type: "number",
-            description:
-              "Sprint ID to add the issue to (from AVAILABLE SPRINTS)",
+            description: "Sprint ID (from AVAILABLE SPRINTS)",
           },
           story_points: {
             type: "number",
@@ -144,10 +151,10 @@ Returns: { key, url, summary, issue_type, assignee, sprint, story_points, status
           status: {
             type: "string",
             description:
-              "Target status from AVAILABLE STATUSES (e.g. 'UI Review', 'Concluído'). If omitted, stays in initial status.",
+              "Target status from AVAILABLE STATUSES (e.g. 'UI Review', 'Concluído')",
           },
         },
-        required: ["summary"],
+        required: [],
       },
     },
   },

@@ -52,13 +52,13 @@ pnpm install
 Create a `.env.local` file:
 
 ```env
-# Jira Configuration
-JIRA_BASE_URL=https://your-domain.atlassian.net
+# Jira Projects Configuration (JSON array - supports multiple projects)
+# Each project needs: id, name, baseUrl, boardId, projectKey
+JIRA_CONFIGS=[{"id":"project1","name":"My Project","baseUrl":"https://your-domain.atlassian.net","boardId":"123","projectKey":"PROJ"}]
+
+# Jira Authentication (shared across all projects)
 JIRA_EMAIL=your-email@company.com
 JIRA_API_TOKEN=your-api-token-here
-
-# Required: Set your board ID so the AI focuses on your project
-DEFAULT_BOARD_ID=123
 
 # Authentication (defaults to admin/admin if not set)
 AUTH_USERNAME=your-username
@@ -265,18 +265,22 @@ vercel
 
 2. **Set environment variables** in Vercel dashboard (Settings → Environment Variables):
 
-| Variable             | Value                               |
-| -------------------- | ----------------------------------- |
-| `JIRA_BASE_URL`      | `https://your-domain.atlassian.net` |
-| `JIRA_EMAIL`         | Your Jira email                     |
-| `JIRA_API_TOKEN`     | Your Jira API token                 |
-| `DEFAULT_BOARD_ID`   | Your board ID                       |
-| `AUTH_USERNAME`      | Login username                      |
-| `AUTH_PASSWORD_HASH` | Bcrypt hash of password             |
-| `OLLAMA_BASE_URL`    | `https://ollama.your-domain.com`    |
-| `OLLAMA_MODEL`       | `qwen2.5:7b` (or other model)       |
-| `OLLAMA_AUTH_USER`   | Basic auth username (if needed)     |
-| `OLLAMA_AUTH_PASS`   | Basic auth password (if needed)     |
+| Variable             | Value                                                       |
+| -------------------- | ----------------------------------------------------------- |
+| `JIRA_CONFIGS`       | JSON array of projects (see format below)                   |
+| `JIRA_EMAIL`         | Your Jira email                                             |
+| `JIRA_API_TOKEN`     | Your Jira API token                                         |
+| `AUTH_USERNAME`      | Login username                                              |
+| `AUTH_PASSWORD_HASH` | Bcrypt hash of password                                     |
+| `OLLAMA_BASE_URL`    | `https://ollama.your-domain.com`                            |
+| `OLLAMA_MODEL`       | `qwen2.5:7b` (or other model)                               |
+| `OLLAMA_AUTH_USER`   | Basic auth username (if needed)                             |
+| `OLLAMA_AUTH_PASS`   | Basic auth password (if needed)                             |
+
+**JIRA_CONFIGS format:**
+```
+[{"id":"proj1","name":"Project 1","baseUrl":"https://your-domain.atlassian.net","boardId":"123","projectKey":"PROJ"}]
+```
 
 3. **Redeploy** after setting environment variables.
 

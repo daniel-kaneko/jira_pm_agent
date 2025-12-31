@@ -11,6 +11,7 @@ import {
   Theme,
   CSVUpload,
   ConfirmationCard,
+  ProjectSelector,
 } from "./components/chat";
 import {
   MatrixRain,
@@ -24,6 +25,7 @@ import {
 } from "./components/themes";
 import { useChat } from "@/hooks/useChat";
 import { useCSV, type CSVRow } from "@/contexts/CSVContext";
+import { useJiraConfig } from "@/contexts/JiraConfigContext";
 
 export default function Home() {
   const {
@@ -33,15 +35,23 @@ export default function Home() {
     pendingAction,
     sendMessage,
     setCSVData,
+    setConfigId,
     confirmAction,
     cancelAction,
   } = useChat();
   const { csvData } = useCSV();
+  const { selectedConfig } = useJiraConfig();
   const [input, setInput] = useState("");
   const [theme, setTheme] = useState<Theme>("grey");
   const [effectsEnabled, setEffectsEnabled] = useState(false);
   const [csvUploading, setCsvUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedConfig) {
+      setConfigId(selectedConfig.id);
+    }
+  }, [selectedConfig, setConfigId]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as Theme | null;
@@ -100,6 +110,9 @@ export default function Home() {
   return (
     <div className="h-screen flex flex-col bg-[var(--bg)] overflow-hidden">
       <Header>
+        <ProjectSelector 
+          disabled={isLoading || csvUploading || !!pendingAction}
+        />
         <ThemeSelector
           currentTheme={theme}
           onThemeChange={handleThemeChange}

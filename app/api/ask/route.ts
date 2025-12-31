@@ -15,12 +15,14 @@ import type {
  * @param toolName - The name of the tool to execute.
  * @param toolArgs - Arguments to pass to the tool.
  * @param cookieHeader - The cookie header from the original request for authentication.
+ * @param configId - The project configuration ID to use.
  * @returns The result from the tool execution.
  */
 async function callTool(
   toolName: string,
   toolArgs: Record<string, unknown>,
-  cookieHeader: string
+  cookieHeader: string,
+  configId: string
 ): Promise<unknown> {
   const baseUrl =
     process.env.NEXT_PUBLIC_BASE_URL ||
@@ -40,7 +42,7 @@ async function callTool(
   const response = await fetch(`${baseUrl}/api/jira/tools`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ tool: toolName, arguments: toolArgs }),
+    body: JSON.stringify({ tool: toolName, arguments: toolArgs, configId }),
   });
 
   if (!response.ok) {
@@ -560,6 +562,7 @@ const WRITE_TOOLS = ["create_issues", "update_issues"];
 async function* orchestrate(
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
   cookieHeader: string,
+  configId: string,
   csvData?: CSVRow[]
 ): AsyncGenerator<StreamEvent> {
   const systemPrompt = generateSystemPrompt();
@@ -664,7 +667,7 @@ async function* orchestrate(
       } else if (toolName === "prepare_issues") {
         toolResult = handlePrepareIssues(csvData, toolArgs);
       } else {
-        toolResult = await callTool(toolName, toolArgs, cookieHeader);
+        toolResult = await callTool(toolName, toolArgs, cookieHeader, configId);
       }
 
       const resultSummary = summarizeToolResult(toolName, toolResult);
@@ -865,7 +868,8 @@ function summarizeToolResult(toolName: string, result: unknown): string {
 
 async function* executeDirectAction(
   executeAction: { toolName: string; issues: Array<Record<string, unknown>> },
-  cookieHeader: string
+  cookieHeader: string,
+  configId: string
 ): AsyncGenerator<StreamEvent> {
   const { toolName, issues } = executeAction;
 
@@ -876,7 +880,12 @@ async function* executeDirectAction(
   };
 
   try {
-    const toolResult = await callTool(toolName, { issues }, cookieHeader);
+    const toolResult = await callTool(
+      toolName,
+      { issues },
+      cookieHeader,
+      configId
+    );
     const resultSummary = summarizeToolResult(toolName, toolResult);
 
     yield {
@@ -923,8 +932,11 @@ async function* executeDirectAction(
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body: AskRequest = await request.json();
-    const { messages, stream = true, csvData, executeAction } = body;
+    const { messages, stream = true, csvData, executeAction, configId } = body;
     const cookieHeader = request.headers.get("cookie") || "";
+
+    const { getDefaultConfig } = await import("@/lib/jira");
+    const effectiveConfigId = configId || getDefaultConfig().id;
 
     if (executeAction) {
       const generator = executeDirectAction(
@@ -932,7 +944,8 @@ export async function POST(request: NextRequest): Promise<Response> {
           toolName: string;
           issues: Array<Record<string, unknown>>;
         },
-        cookieHeader
+        cookieHeader,
+        effectiveConfigId
       );
       const sseStream = createSSEStream(generator);
 
@@ -961,7 +974,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     if (stream) {
-      const generator = orchestrate(messages, cookieHeader, csvData);
+      const generator = orchestrate(
+        messages,
+        cookieHeader,
+        effectiveConfigId,
+        csvData
+      );
       const sseStream = createSSEStream(generator);
 
       return new Response(sseStream, {
@@ -976,7 +994,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     let finalContent = "";
     const reasoning: string[] = [];
 
-    for await (const event of orchestrate(messages, cookieHeader, csvData)) {
+    for await (const event of orchestrate(
+      messages,
+      cookieHeader,
+      effectiveConfigId,
+      csvData
+    )) {
       if (event.type === "chunk" && event.content) {
         finalContent += event.content;
       } else if (event.type === "reasoning" && event.content) {

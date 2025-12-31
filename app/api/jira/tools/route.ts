@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jiraTools, executeJiraTool, isValidToolName } from "@/lib/jira";
+import { jiraTools, executeJiraTool, isValidToolName, getDefaultConfig } from "@/lib/jira";
 import type { ExecuteRequest } from "@/lib/types";
 
 export async function GET(): Promise<Response> {
@@ -16,7 +16,7 @@ export async function GET(): Promise<Response> {
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body: ExecuteRequest = await request.json();
-    const { tool, arguments: args } = body;
+    const { tool, arguments: args, configId } = body;
 
     if (!tool) {
       return NextResponse.json(
@@ -33,10 +33,15 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    const result = await executeJiraTool({
-      name: tool,
-      arguments: args || {},
-    });
+    const effectiveConfigId = configId || getDefaultConfig().id;
+
+    const result = await executeJiraTool(
+      {
+        name: tool,
+        arguments: args || {},
+      },
+      effectiveConfigId
+    );
 
     return NextResponse.json({
       tool,

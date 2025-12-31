@@ -1,10 +1,10 @@
-import { jiraClient } from "./client";
+import { createJiraClient } from "./client";
+import { getConfig, getBoardId } from "./config";
 import {
   getCachedTeamMembers,
   getStoryPointsFieldId,
   getCachedData,
 } from "./cache";
-import { JIRA_CONFIG } from "../constants";
 import { TOOL_NAMES } from "./tools";
 import type {
   ToolName,
@@ -15,6 +15,7 @@ import type {
   IssueToCreate,
   IssueToUpdate,
   BulkOperationResult,
+  JiraProjectConfig,
 } from "./types";
 import type { ToolCallInput } from "../types";
 
@@ -31,10 +32,6 @@ interface ResolveNameOptions {
 
 /**
  * Resolve a name to an email using cached team members.
- * @param input - The name or email to resolve.
- * @param cachedTeam - Cached team members.
- * @param options - Resolution options. If strict=true, throws on not found/ambiguous.
- * @returns The resolved email, or original input (non-strict mode).
  */
 function resolveName(
   input: string,
@@ -86,7 +83,6 @@ function resolveName(
 
 /**
  * Validate sprint IDs against available sprints.
- * @throws Error if any sprint ID is invalid.
  */
 function validateSprintIds(
   sprintIds: number[],
@@ -139,19 +135,19 @@ function applyFilters<T>(
 }
 
 async function handlePrepareSearch(
+  config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<PrepareSearchResult> {
   const names = (args.names as string[] | undefined) || [];
   let sprintIds = args.sprint_ids as number[] | undefined;
 
-  if (!JIRA_CONFIG.boardId) {
-    throw new Error("DEFAULT_BOARD_ID not configured in environment");
-  }
+  const client = createJiraClient(config);
+  const boardId = getBoardId(config);
 
   const [boardInfo, allSprints, cachedTeam] = await Promise.all([
-    jiraClient.getBoardInfo(JIRA_CONFIG.boardId),
-    jiraClient.listSprints(JIRA_CONFIG.boardId, "all", 50),
-    getCachedTeamMembers(),
+    client.getBoardInfo(boardId),
+    client.listSprints(boardId, "all", 50),
+    getCachedTeamMembers(config.id),
   ]);
 
   if (!sprintIds || sprintIds.length === 0) {
@@ -216,6 +212,7 @@ async function handlePrepareSearch(
 }
 
 async function handleGetSprintIssues(
+  config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<GetSprintIssuesResult> {
   const sprint_ids = args.sprint_ids as number[] | undefined;
@@ -228,17 +225,16 @@ async function handleGetSprintIssues(
     throw new Error("sprint_ids is required");
   }
 
-  const boardSprints = await jiraClient.listSprints(
-    JIRA_CONFIG.boardId!,
-    "all",
-    50
-  );
+  const client = createJiraClient(config);
+  const boardId = getBoardId(config);
+
+  const boardSprints = await client.listSprints(boardId, "all", 50);
   validateSprintIds(sprint_ids, boardSprints);
 
   const assigneeInput = assignees || assignee_emails;
   const [cachedTeam, storyPointsFieldId] = await Promise.all([
-    getCachedTeamMembers(),
-    getStoryPointsFieldId(),
+    getCachedTeamMembers(config.id),
+    getStoryPointsFieldId(config.id),
   ]);
 
   const resolvedEmails = assigneeInput?.map((input) =>
@@ -247,7 +243,7 @@ async function handleGetSprintIssues(
 
   const sprintResults = await Promise.all(
     sprint_ids.map(async (sprintId) => {
-      const result: JiraSprintIssues = await jiraClient.getSprintIssues(
+      const result: JiraSprintIssues = await client.getSprintIssues(
         sprintId,
         storyPointsFieldId
       );
@@ -266,7 +262,7 @@ async function handleGetSprintIssues(
 
       const formattedIssues = sortedIssues.map((issue) => ({
         key: issue.key,
-        key_link: `[${issue.key}](${JIRA_CONFIG.baseUrl}/browse/${issue.key})`,
+        key_link: `[${issue.key}](${config.baseUrl}/browse/${issue.key})`,
         summary: issue.summary,
         status: issue.status,
         assignee: issue.assignee,
@@ -311,6 +307,7 @@ async function handleGetSprintIssues(
 }
 
 async function handleGetIssue(
+  config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<GetIssueResult> {
   const issue_key = args.issue_key as string | undefined;
@@ -319,14 +316,13 @@ async function handleGetIssue(
     throw new Error("issue_key is required");
   }
 
-  const storyPointsFieldId = await getStoryPointsFieldId();
-  return jiraClient.getIssue(issue_key, storyPointsFieldId);
+  const client = createJiraClient(config);
+  const storyPointsFieldId = await getStoryPointsFieldId(config.id);
+  return client.getIssue(issue_key, storyPointsFieldId);
 }
 
 /**
  * Parse an ISO date string into a Date.
- * @param since - ISO date 'YYYY-MM-DD'.
- * @returns The parsed Date.
  */
 function parseSinceDate(since: string): Date {
   const parsed = new Date(since);
@@ -337,6 +333,7 @@ function parseSinceDate(since: string): Date {
 }
 
 async function handleGetActivity(
+  config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<GetActivityResult> {
   const sprint_ids = args.sprint_ids as number[] | undefined;
@@ -352,19 +349,18 @@ async function handleGetActivity(
     throw new Error("since is required (use YYYY-MM-DD format)");
   }
 
-  const boardSprints = await jiraClient.listSprints(
-    JIRA_CONFIG.boardId!,
-    "all",
-    50
-  );
+  const client = createJiraClient(config);
+  const boardId = getBoardId(config);
+
+  const boardSprints = await client.listSprints(boardId, "all", 50);
   validateSprintIds(sprint_ids, boardSprints);
 
   const sinceDate = parseSinceDate(since);
   const untilDate = new Date();
 
   const [cachedTeam, issuesWithChangelogs] = await Promise.all([
-    getCachedTeamMembers(),
-    jiraClient.getSprintChangelogs(sprint_ids, sinceDate),
+    getCachedTeamMembers(config.id),
+    client.getSprintChangelogs(sprint_ids, sinceDate),
   ]);
 
   const resolvedAssignees = assignees?.map((name) =>
@@ -429,6 +425,7 @@ async function handleGetActivity(
  * Transition an issue to a target status if specified and not already there.
  */
 async function transitionIfNeeded(
+  config: JiraProjectConfig,
   issueKey: string,
   targetStatus: string | undefined,
   currentStatus?: string
@@ -439,7 +436,8 @@ async function transitionIfNeeded(
   if (statusLower === "backlog") return "Backlog";
   if (currentStatus?.toLowerCase() === statusLower) return currentStatus;
 
-  const transitions = await jiraClient.getTransitions(issueKey);
+  const client = createJiraClient(config);
+  const transitions = await client.getTransitions(issueKey);
   const match = transitions.find(
     (transition) => transition.name.toLowerCase() === statusLower
   );
@@ -452,7 +450,7 @@ async function transitionIfNeeded(
     );
   }
 
-  await jiraClient.transitionIssue(issueKey, match.id);
+  await client.transitionIssue(issueKey, match.id);
   return match.name;
 }
 
@@ -460,14 +458,17 @@ async function transitionIfNeeded(
  * Move issue to sprint if specified.
  */
 async function moveToSprintIfNeeded(
+  config: JiraProjectConfig,
   issueKey: string,
-  sprintId: number | undefined,
-  boardId: number
+  sprintId: number | undefined
 ): Promise<string | null> {
   if (!sprintId) return null;
 
-  await jiraClient.moveIssuesToSprint(sprintId, [issueKey]);
-  const sprints = await jiraClient.listSprints(boardId, "all", 50);
+  const client = createJiraClient(config);
+  const boardId = getBoardId(config);
+
+  await client.moveIssuesToSprint(sprintId, [issueKey]);
+  const sprints = await client.listSprints(boardId, "all", 50);
   const sprint = sprints.find((sp) => sp.id === sprintId);
   return sprint?.name || `Sprint ${sprintId}`;
 }
@@ -494,6 +495,7 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function handleCreateIssues(
+  config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<CreateIssuesResult> {
   const issues = args.issues as IssueToCreate[] | undefined;
@@ -502,16 +504,15 @@ async function handleCreateIssues(
     throw new Error("issues array is required and cannot be empty");
   }
 
-  if (!JIRA_CONFIG.boardId) {
-    throw new Error("DEFAULT_BOARD_ID not configured in environment");
-  }
+  const client = createJiraClient(config);
+  const boardId = getBoardId(config);
 
   const [boardInfo, storyPointsFieldId, cachedTeam, sprints] =
     await Promise.all([
-      jiraClient.getBoardInfo(JIRA_CONFIG.boardId),
-      getStoryPointsFieldId(),
-      getCachedTeamMembers(),
-      jiraClient.listSprints(JIRA_CONFIG.boardId, "active", 1),
+      client.getBoardInfo(boardId),
+      getStoryPointsFieldId(config.id),
+      getCachedTeamMembers(config.id),
+      client.listSprints(boardId, "active", 1),
     ]);
 
   const activeSprintId = sprints.length > 0 ? sprints[0].id : null;
@@ -521,7 +522,7 @@ async function handleCreateIssues(
       let assigneeAccountId: string | undefined;
       if (issue.assignee) {
         const email = resolveName(issue.assignee, cachedTeam, { strict: true });
-        assigneeAccountId = await jiraClient.getAccountIdByEmail(email);
+        assigneeAccountId = await client.getAccountIdByEmail(email);
       }
       return {
         summary: issue.summary,
@@ -533,7 +534,7 @@ async function handleCreateIssues(
     })
   );
 
-  const bulkResults = await jiraClient.bulkCreateIssues(
+  const bulkResults = await client.bulkCreateIssues(
     preparedIssues,
     boardInfo.project_key,
     storyPointsFieldId
@@ -552,14 +553,14 @@ async function handleCreateIssues(
       if (targetSprintId) {
         try {
           await withRetry(() =>
-            jiraClient.moveIssuesToSprint(targetSprintId, [result.key!])
+            client.moveIssuesToSprint(targetSprintId, [result.key!])
           );
         } catch {}
       }
       if (originalIssue.status && originalIssue.status !== "Backlog") {
         try {
           await withRetry(() =>
-            transitionIfNeeded(result.key!, originalIssue.status)
+            transitionIfNeeded(config, result.key!, originalIssue.status)
           );
         } catch {}
       }
@@ -589,6 +590,7 @@ async function handleCreateIssues(
 }
 
 async function handleUpdateIssues(
+  config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<UpdateIssuesResult> {
   const issues = args.issues as IssueToUpdate[] | undefined;
@@ -597,13 +599,11 @@ async function handleUpdateIssues(
     throw new Error("issues array is required and cannot be empty");
   }
 
-  if (!JIRA_CONFIG.boardId) {
-    throw new Error("DEFAULT_BOARD_ID not configured in environment");
-  }
+  const client = createJiraClient(config);
 
   const [storyPointsFieldId, cachedTeam] = await Promise.all([
-    getStoryPointsFieldId(),
-    getCachedTeamMembers(),
+    getStoryPointsFieldId(config.id),
+    getCachedTeamMembers(config.id),
   ]);
 
   const results: BulkOperationResult[] = [];
@@ -630,7 +630,7 @@ async function handleUpdateIssues(
 
       if (hasFieldUpdates) {
         await withRetry(() =>
-          jiraClient.updateIssue({
+          client.updateIssue({
             issueKey: issue.issue_key,
             summary: issue.summary,
             description: issue.description,
@@ -647,14 +647,14 @@ async function handleUpdateIssues(
 
       if (issue.sprint_id) {
         await withRetry(() =>
-          jiraClient.moveIssuesToSprint(issue.sprint_id!, [issue.issue_key])
+          client.moveIssuesToSprint(issue.sprint_id!, [issue.issue_key])
         );
         changes.push(`sprint → ${issue.sprint_id}`);
       }
 
       if (issue.status) {
         const newStatus = await withRetry(() =>
-          transitionIfNeeded(issue.issue_key, issue.status)
+          transitionIfNeeded(config, issue.issue_key, issue.status)
         );
         changes.push(`status → ${newStatus}`);
       }
@@ -707,22 +707,18 @@ interface ListSprintsResult {
 }
 
 async function handleListSprints(
+  config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<ListSprintsResult> {
   const state = (args.state as string) || "all";
   const limit = (args.limit as number) || 20;
 
-  if (!JIRA_CONFIG.boardId) {
-    throw new Error("JIRA_BOARD_ID not configured");
-  }
+  const client = createJiraClient(config);
+  const boardId = getBoardId(config);
 
   const filterState =
     state === "all" ? "all" : (state as "active" | "closed" | "future");
-  const sprints = await jiraClient.listSprints(
-    JIRA_CONFIG.boardId,
-    filterState,
-    limit
-  );
+  const sprints = await client.listSprints(boardId, filterState, limit);
 
   return {
     sprints: sprints.map((sprint) => ({
@@ -739,8 +735,10 @@ interface GetContextResult {
   statuses: string[];
 }
 
-async function handleGetContext(): Promise<GetContextResult> {
-  const cachedData = await getCachedData();
+async function handleGetContext(
+  config: JiraProjectConfig
+): Promise<GetContextResult> {
+  const cachedData = await getCachedData(config.id);
 
   return {
     team_members: cachedData.teamMembers.map((member) => member.name),
@@ -749,7 +747,8 @@ async function handleGetContext(): Promise<GetContextResult> {
 }
 
 export async function executeJiraTool(
-  toolCall: ToolCallInput
+  toolCall: ToolCallInput,
+  configId: string
 ): Promise<
   | ListSprintsResult
   | GetContextResult
@@ -761,31 +760,32 @@ export async function executeJiraTool(
   | UpdateIssuesResult
 > {
   const { name, arguments: args } = toolCall;
+  const config = getConfig(configId);
 
   switch (name as ToolName) {
     case "list_sprints":
-      return handleListSprints(args);
+      return handleListSprints(config, args);
 
     case "get_context":
-      return handleGetContext();
+      return handleGetContext(config);
 
     case "prepare_search":
-      return handlePrepareSearch(args);
+      return handlePrepareSearch(config, args);
 
     case "get_sprint_issues":
-      return handleGetSprintIssues(args);
+      return handleGetSprintIssues(config, args);
 
     case "get_issue":
-      return handleGetIssue(args);
+      return handleGetIssue(config, args);
 
     case "get_activity":
-      return handleGetActivity(args);
+      return handleGetActivity(config, args);
 
     case "create_issues":
-      return handleCreateIssues(args);
+      return handleCreateIssues(config, args);
 
     case "update_issues":
-      return handleUpdateIssues(args);
+      return handleUpdateIssues(config, args);
 
     default:
       throw new Error(`Unknown tool: ${name}`);

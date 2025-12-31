@@ -70,6 +70,13 @@ function shouldResetHistory(
   return false;
 }
 
+interface ConfigSession {
+  messages: Message[];
+  csvData: CSVRow[] | null;
+}
+
+const configSessions = new Map<string, ConfigSession>();
+
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -82,12 +89,41 @@ export function useChat() {
   const structuredDataRef = useRef<StructuredData[]>([]);
   const queryContextRef = useRef<QueryContext | undefined>(undefined);
   const csvDataRef = useRef<CSVRow[] | null>(null);
+  const configIdRef = useRef<string | null>(null);
   const lastMessagesRef = useRef<
     Array<{ role: "user" | "assistant"; content: string }>
   >([]);
 
   const setCSVData = useCallback((data: CSVRow[] | null) => {
     csvDataRef.current = data;
+  }, []);
+
+  const setConfigId = useCallback((configId: string | null) => {
+    if (configIdRef.current && messagesRef.current.length > 0) {
+      configSessions.set(configIdRef.current, {
+        messages: [...messagesRef.current],
+        csvData: csvDataRef.current,
+      });
+    }
+
+    configIdRef.current = configId;
+
+    if (configId) {
+      const savedSession = configSessions.get(configId);
+      if (savedSession) {
+        messagesRef.current = savedSession.messages;
+        csvDataRef.current = savedSession.csvData;
+        setMessages(savedSession.messages);
+      } else {
+        messagesRef.current = [];
+        csvDataRef.current = null;
+        setMessages([]);
+      }
+    }
+
+    reasoningRef.current = [];
+    setReasoning([]);
+    setPendingAction(null);
   }, []);
 
   const sendMessage = useCallback(
@@ -156,7 +192,7 @@ export function useChat() {
           messages: typeof historyForApi;
           stream: boolean;
           csvData?: CSVRow[];
-          confirmedActionId?: string;
+          configId?: string;
         } = {
           messages: historyForApi,
           stream: true,
@@ -164,6 +200,10 @@ export function useChat() {
 
         if (csvDataRef.current) {
           requestBody.csvData = csvDataRef.current;
+        }
+
+        if (configIdRef.current) {
+          requestBody.configId = configIdRef.current;
         }
 
         const res = await fetch("/api/ask", {
@@ -332,10 +372,19 @@ export function useChat() {
     [isLoading]
   );
 
-  const clearMessages = useCallback(() => {
+  const clearChat = useCallback(() => {
     setMessages([]);
     messagesRef.current = [];
     setReasoning([]);
+    reasoningRef.current = [];
+    structuredDataRef.current = [];
+    queryContextRef.current = undefined;
+    csvDataRef.current = null;
+    setPendingAction(null);
+    
+    if (configIdRef.current) {
+      configSessions.delete(configIdRef.current);
+    }
   }, []);
 
   const confirmAction = useCallback(async () => {
@@ -344,13 +393,24 @@ export function useChat() {
     setPendingAction(null);
     setIsLoading(true);
 
-    const requestBody = {
+    const requestBody: {
+      executeAction: {
+        toolName: string;
+        issues: typeof pendingAction.issues;
+      };
+      stream: boolean;
+      configId?: string;
+    } = {
       executeAction: {
         toolName: pendingAction.toolName,
         issues: pendingAction.issues,
       },
       stream: true,
     };
+
+    if (configIdRef.current) {
+      requestBody.configId = configIdRef.current;
+    }
 
     reasoningRef.current = [
       ...reasoningRef.current,
@@ -516,8 +576,9 @@ export function useChat() {
     reasoning,
     pendingAction,
     sendMessage,
-    clearMessages,
+    clearChat,
     setCSVData,
+    setConfigId,
     confirmAction,
     cancelAction,
   };

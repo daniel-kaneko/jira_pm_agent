@@ -26,6 +26,7 @@ export interface AskRequest {
   stream?: boolean;
   csvData?: CSVRow[];
   executeAction?: ExecuteActionPayload;
+  configId?: string;
 }
 
 export interface StreamEvent {
@@ -47,6 +48,7 @@ export interface ToolResponse {
 export interface ExecuteRequest {
   tool: string;
   arguments: Record<string, unknown>;
+  configId?: string;
 }
 
 export interface ToolCallInput {

@@ -1,3 +1,14 @@
+/**
+ * Configuration for a Jira project.
+ */
+export interface JiraProjectConfig {
+  id: string;
+  name: string;
+  baseUrl: string;
+  boardId: string;
+  projectKey: string;
+}
+
 export interface JiraIssue {
   key: string;
   summary: string;

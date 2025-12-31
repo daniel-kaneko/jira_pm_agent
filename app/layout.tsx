@@ -3,6 +3,7 @@ import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CSVProvider } from "@/contexts/CSVContext";
+import { JiraConfigProvider } from "@/contexts/JiraConfigContext";
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
@@ -23,7 +24,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${jetbrainsMono.className} antialiased`}>
         <ErrorBoundary>
-          <CSVProvider>{children}</CSVProvider>
+          <JiraConfigProvider>
+            <CSVProvider>{children}</CSVProvider>
+          </JiraConfigProvider>
         </ErrorBoundary>
       </body>
     </html>

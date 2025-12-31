@@ -7,6 +7,7 @@ import type {
   StreamEvent,
   ToolResponse,
   ChatMessage,
+  CSVRow,
 } from "@/lib/types";
 
 /**
@@ -292,9 +293,274 @@ function createSSEStream(
   });
 }
 
+interface QueryCSVResult {
+  rows: CSVRow[];
+  summary: {
+    totalRows: number;
+    filteredRows: number;
+    columns: string[];
+    filtersApplied: string[];
+    rowIndices?: number[];
+    availableFilters?: Record<string, string[]>;
+  };
+}
+
+const MAX_UNIQUE_VALUES_FOR_FILTER = 20;
+const MAX_VALUES_TO_SHOW = 10;
+
+function computeAvailableFilters(
+  csvData: CSVRow[],
+  columns: string[]
+): Record<string, string[]> {
+  const availableFilters: Record<string, string[]> = {};
+
+  for (const column of columns) {
+    const uniqueValues = new Set<string>();
+    let nonEmptyCount = 0;
+
+    for (const row of csvData) {
+      const value = row[column]?.trim();
+      if (value) {
+        uniqueValues.add(value);
+        nonEmptyCount++;
+      }
+      if (uniqueValues.size > MAX_UNIQUE_VALUES_FOR_FILTER) break;
+    }
+
+    const fillRate = nonEmptyCount / csvData.length;
+    if (fillRate < 0.3) continue;
+
+    if (
+      uniqueValues.size > 0 &&
+      uniqueValues.size <= MAX_UNIQUE_VALUES_FOR_FILTER
+    ) {
+      const values = Array.from(uniqueValues).sort();
+      availableFilters[column] = values.slice(0, MAX_VALUES_TO_SHOW);
+    }
+  }
+
+  return availableFilters;
+}
+
+function handleQueryCSV(
+  csvData: CSVRow[] | undefined,
+  args: Record<string, unknown>
+): QueryCSVResult {
+  if (!csvData || csvData.length === 0) {
+    return {
+      rows: [],
+      summary: {
+        totalRows: 0,
+        filteredRows: 0,
+        columns: [],
+        filtersApplied: [],
+      },
+    };
+  }
+
+  const columns = Object.keys(csvData[0]);
+  const rawRowIndices = args.rowIndices ?? args.rowIndex;
+  const filters = args.filters as Record<string, string | string[]> | undefined;
+  const offset = (args.offset as number) || 0;
+  const limit = (args.limit as number) || 50;
+  const filtersApplied: string[] = [];
+
+  if (rawRowIndices !== undefined) {
+    const indices: number[] = Array.isArray(rawRowIndices)
+      ? rawRowIndices
+      : [rawRowIndices as number];
+
+    const validIndices = indices.filter(
+      (idx) => idx >= 1 && idx <= csvData.length
+    );
+    const rows = validIndices.map((idx) => csvData[idx - 1]);
+
+    return {
+      rows,
+      summary: {
+        totalRows: csvData.length,
+        filteredRows: rows.length,
+        columns,
+        filtersApplied: [],
+        rowIndices: indices,
+      },
+    };
+  }
+
+  const availableFilters = computeAvailableFilters(csvData, columns);
+
+  let filtered = csvData;
+  if (filters && typeof filters === "object") {
+    Object.entries(filters).forEach(([col, val]) => {
+      if (!val) return;
+
+      if (Array.isArray(val)) {
+        const valuesLower = val.map((v) => String(v).toLowerCase());
+        filtered = filtered.filter((row) => {
+          const cellValue = row[col]?.toLowerCase() || "";
+          return valuesLower.some((v) => cellValue.includes(v));
+        });
+        filtersApplied.push(`${col} IN [${val.join(", ")}]`);
+      } else {
+        const valLower = String(val).toLowerCase();
+        filtered = filtered.filter((row) =>
+          row[col]?.toLowerCase().includes(valLower)
+        );
+        filtersApplied.push(`${col}="${val}"`);
+      }
+    });
+  }
+
+  return {
+    rows: filtered.slice(offset, offset + limit),
+    summary: {
+      totalRows: csvData.length,
+      filteredRows: filtered.length,
+      columns,
+      availableFilters,
+      filtersApplied,
+    },
+  };
+}
+
+interface PrepareIssuesResult {
+  preview: Array<{
+    summary: string;
+    description: string;
+    assignee: string;
+    story_points: number | null;
+    sprint_id: number | null;
+    issue_type: string;
+  }>;
+  ready_for_creation: boolean;
+  errors: string[];
+}
+
+/**
+ * Find the actual column name using case-insensitive matching.
+ * Returns the original column name if found, null otherwise.
+ */
+function findColumnCaseInsensitive(
+  columns: string[],
+  searchName: string
+): string | null {
+  const searchLower = searchName.toLowerCase();
+  return columns.find((col) => col.toLowerCase() === searchLower) ?? null;
+}
+
+function handlePrepareIssues(
+  csvData: CSVRow[] | undefined,
+  args: Record<string, unknown>
+): PrepareIssuesResult {
+  const errors: string[] = [];
+
+  if (!csvData || csvData.length === 0) {
+    return {
+      preview: [],
+      ready_for_creation: false,
+      errors: ["No CSV data available"],
+    };
+  }
+
+  const rowIndices = args.row_indices as number[] | undefined;
+  const mapping = args.mapping as Record<string, unknown> | undefined;
+
+  if (!rowIndices || rowIndices.length === 0) {
+    return {
+      preview: [],
+      ready_for_creation: false,
+      errors: ["row_indices is required"],
+    };
+  }
+
+  if (!mapping) {
+    return {
+      preview: [],
+      ready_for_creation: false,
+      errors: ["mapping is required"],
+    };
+  }
+
+  const columns = Object.keys(csvData[0]);
+  const summaryColumnInput = mapping.summary_column as string | undefined;
+  const descriptionColumnInput = mapping.description_column as
+    | string
+    | undefined;
+  const assignee = mapping.assignee as string | undefined;
+  const storyPoints = mapping.story_points as number | undefined;
+  const sprintId = mapping.sprint_id as number | undefined;
+  const issueType = (mapping.issue_type as string) || "Story";
+
+  if (!summaryColumnInput) {
+    return {
+      preview: [],
+      ready_for_creation: false,
+      errors: [
+        `summary_column is required. Available columns: ${columns.join(", ")}`,
+      ],
+    };
+  }
+
+  const summaryColumn = findColumnCaseInsensitive(columns, summaryColumnInput);
+  if (!summaryColumn) {
+    return {
+      preview: [],
+      ready_for_creation: false,
+      errors: [
+        `Column "${summaryColumnInput}" not found. Available: ${columns.join(
+          ", "
+        )}`,
+      ],
+    };
+  }
+
+  let descriptionColumn: string | null = null;
+  if (descriptionColumnInput) {
+    descriptionColumn = findColumnCaseInsensitive(
+      columns,
+      descriptionColumnInput
+    );
+    if (!descriptionColumn) {
+      errors.push(
+        `Warning: Column "${descriptionColumnInput}" not found, description will be empty`
+      );
+    }
+  }
+
+  const preview = rowIndices
+    .map((idx) => {
+      if (idx < 1 || idx > csvData.length) {
+        errors.push(`Row ${idx} out of range (1-${csvData.length})`);
+        return null;
+      }
+
+      const row = csvData[idx - 1];
+      return {
+        summary: row[summaryColumn] || `Row ${idx}`,
+        description: descriptionColumn ? row[descriptionColumn] || "" : "",
+        assignee: assignee || "",
+        story_points: storyPoints ?? null,
+        sprint_id: sprintId ?? null,
+        issue_type: issueType,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  return {
+    preview,
+    ready_for_creation:
+      preview.length > 0 &&
+      errors.filter((e) => !e.startsWith("Warning")).length === 0,
+    errors,
+  };
+}
+
+const WRITE_TOOLS = ["create_issues", "update_issues"];
+
 async function* orchestrate(
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
-  cookieHeader: string
+  cookieHeader: string,
+  csvData?: CSVRow[]
 ): AsyncGenerator<StreamEvent> {
   const systemPrompt = generateSystemPrompt();
 
@@ -337,6 +603,48 @@ async function* orchestrate(
       toolArgs = rawArgs as Record<string, unknown>;
     }
 
+    if (WRITE_TOOLS.includes(toolName)) {
+      if (assistantMessage.content) {
+        yield { type: "chunk", content: assistantMessage.content };
+      }
+
+      yield {
+        type: "reasoning",
+        content: `Preparing to ${
+          toolName === "create_issues" ? "create" : "update"
+        } issues...`,
+      };
+
+      yield {
+        type: "tool_call",
+        tool: toolName,
+        arguments: toolArgs,
+      };
+
+      const actionId = crypto.randomUUID();
+      const issues = (toolArgs.issues as Array<Record<string, unknown>>) || [];
+
+      yield {
+        type: "confirmation_required",
+        pendingAction: {
+          id: actionId,
+          toolName: toolName as "create_issues" | "update_issues",
+          issues: issues.map((issue) => ({
+            summary: issue.summary as string | undefined,
+            description: issue.description as string | undefined,
+            assignee: issue.assignee as string | undefined,
+            status: issue.status as string | undefined,
+            issue_key: issue.issue_key as string | undefined,
+            sprint_id: issue.sprint_id as number | undefined,
+            story_points: issue.story_points as number | undefined,
+          })),
+        },
+      };
+
+      yield { type: "done" };
+      return;
+    }
+
     yield {
       type: "reasoning",
       content: assistantMessage.content || `Calling ${toolName}...`,
@@ -349,7 +657,16 @@ async function* orchestrate(
     };
 
     try {
-      const toolResult = await callTool(toolName, toolArgs, cookieHeader);
+      let toolResult: unknown;
+
+      if (toolName === "query_csv") {
+        toolResult = handleQueryCSV(csvData, toolArgs);
+      } else if (toolName === "prepare_issues") {
+        toolResult = handlePrepareIssues(csvData, toolArgs);
+      } else {
+        toolResult = await callTool(toolName, toolArgs, cookieHeader);
+      }
+
       const resultSummary = summarizeToolResult(toolName, toolResult);
 
       yield {
@@ -474,15 +791,159 @@ function summarizeToolResult(toolName: string, result: unknown): string {
       };
       return `Found ${data.total_issues} issues (${data.total_story_points} story points)`;
     }
+    case "query_csv": {
+      const data = result as {
+        rows: Record<string, string>[];
+        summary: {
+          totalRows: number;
+          filteredRows: number;
+          filtersApplied: string[];
+          rowIndices?: number[];
+          availableFilters?: Record<string, string[]>;
+        };
+      };
+      if (data.summary.rowIndices !== undefined) {
+        const requested = data.summary.rowIndices;
+        const found = data.rows.length;
+        if (found === 0) {
+          return `Rows ${requested.join(", ")} not found (CSV has ${
+            data.summary.totalRows
+          } rows)`;
+        }
+        if (requested.length === 1) {
+          return `Retrieved row ${requested[0]}`;
+        }
+        return `Retrieved ${found} of ${requested.length} requested rows`;
+      }
+      const filterInfo =
+        data.summary.filtersApplied.length > 0
+          ? ` (filtered by: ${data.summary.filtersApplied.join(", ")})`
+          : "";
+      let summary = `Found ${data.summary.filteredRows} of ${data.summary.totalRows} rows${filterInfo}`;
+      if (
+        data.summary.availableFilters &&
+        data.summary.filtersApplied.length === 0
+      ) {
+        const filterCols = Object.keys(data.summary.availableFilters);
+        if (filterCols.length > 0) {
+          summary += ` | Filterable columns: ${filterCols
+            .slice(0, 5)
+            .join(", ")}`;
+        }
+      }
+      return summary;
+    }
+    case "prepare_issues": {
+      const data = result as PrepareIssuesResult;
+      if (data.errors.length > 0 && !data.ready_for_creation) {
+        return `Error: ${data.errors.join(", ")}`;
+      }
+      const warnings = data.errors.filter((e) => e.startsWith("Warning"));
+      const issuesForCreate = data.preview.map((p) => ({
+        summary: p.summary,
+        description: p.description || undefined,
+        assignee: p.assignee || undefined,
+        story_points: p.story_points ?? undefined,
+        sprint_id: p.sprint_id ?? undefined,
+        issue_type: p.issue_type,
+      }));
+      let msg = `Ready to create ${data.preview.length} issue${
+        data.preview.length !== 1 ? "s" : ""
+      }. `;
+      msg += `Call create_issues with: ${JSON.stringify({
+        issues: issuesForCreate,
+      })}`;
+      if (warnings.length > 0) {
+        msg += ` (${warnings.join("; ")})`;
+      }
+      return msg;
+    }
     default:
       return "Tool executed successfully";
+  }
+}
+
+async function* executeDirectAction(
+  executeAction: { toolName: string; issues: Array<Record<string, unknown>> },
+  cookieHeader: string
+): AsyncGenerator<StreamEvent> {
+  const { toolName, issues } = executeAction;
+
+  yield {
+    type: "tool_call",
+    tool: toolName,
+    arguments: { issues },
+  };
+
+  try {
+    const toolResult = await callTool(toolName, { issues }, cookieHeader);
+    const resultSummary = summarizeToolResult(toolName, toolResult);
+
+    yield {
+      type: "tool_result",
+      tool: toolName,
+      content: resultSummary,
+    };
+
+    const result = toolResult as {
+      succeeded?: number;
+      failed?: number;
+      results?: Array<{ key?: string; summary?: string }>;
+    };
+    const successCount = result.succeeded || 0;
+    const failCount = result.failed || 0;
+
+    let message = "";
+    if (successCount > 0 && failCount === 0) {
+      message = `Successfully ${
+        toolName === "create_issues" ? "created" : "updated"
+      } ${successCount} issue${successCount !== 1 ? "s" : ""}.`;
+      if (result.results) {
+        const keys = result.results
+          .filter((r) => r.key)
+          .map((r) => r.key)
+          .join(", ");
+        if (keys) message += ` Keys: ${keys}`;
+      }
+    } else if (failCount > 0) {
+      message = `Completed with ${successCount} succeeded, ${failCount} failed.`;
+    }
+
+    yield { type: "chunk", content: message };
+    yield { type: "done" };
+  } catch (error) {
+    yield {
+      type: "error",
+      content: error instanceof Error ? error.message : "Tool execution failed",
+    };
+    yield { type: "done" };
   }
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body: AskRequest = await request.json();
-    const { messages, stream = true } = body;
+    const { messages, stream = true, csvData, executeAction } = body;
+    const cookieHeader = request.headers.get("cookie") || "";
+
+    if (executeAction) {
+      const generator = executeDirectAction(
+        executeAction as {
+          toolName: string;
+          issues: Array<Record<string, unknown>>;
+        },
+        cookieHeader
+      );
+      const sseStream = createSSEStream(generator);
+
+      return new Response(sseStream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
 
     if (!messages || messages.length === 0) {
       return new Response(JSON.stringify({ error: "Messages are required" }), {
@@ -499,10 +960,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       });
     }
 
-    const cookieHeader = request.headers.get("cookie") || "";
-
     if (stream) {
-      const generator = orchestrate(messages, cookieHeader);
+      const generator = orchestrate(messages, cookieHeader, csvData);
       const sseStream = createSSEStream(generator);
 
       return new Response(sseStream, {
@@ -517,7 +976,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     let finalContent = "";
     const reasoning: string[] = [];
 
-    for await (const event of orchestrate(messages, cookieHeader)) {
+    for await (const event of orchestrate(messages, cookieHeader, csvData)) {
       if (event.type === "chunk" && event.content) {
         finalContent += event.content;
       } else if (event.type === "reasoning" && event.content) {

@@ -147,17 +147,6 @@ export interface GetIssueArgs {
   issue_key: string;
 }
 
-export interface ManageIssueArgs {
-  issue_key?: string;
-  summary?: string;
-  description?: string;
-  issue_type?: string;
-  assignee?: string;
-  sprint_id?: number;
-  story_points?: number;
-  status?: string;
-}
-
 export interface GetActivityArgs {
   sprint_ids: number[];
   since: string;
@@ -216,13 +205,25 @@ export interface ListSprintsArgs {
   limit?: number;
 }
 
-export interface GetContextArgs {
-  // No arguments needed
-}
+export interface GetContextArgs {}
 
 export interface QueryCSVArgs {
   filters?: Record<string, string>;
   limit?: number;
+}
+
+export interface PrepareIssuesMapping {
+  summary_column: string;
+  description_column?: string;
+  assignee?: string;
+  story_points?: number;
+  sprint_id?: number;
+  issue_type?: string;
+}
+
+export interface PrepareIssuesArgs {
+  row_indices: number[];
+  mapping: PrepareIssuesMapping;
 }
 
 export type ToolArgsMap = {
@@ -230,10 +231,10 @@ export type ToolArgsMap = {
   get_context: GetContextArgs;
   query_csv: QueryCSVArgs;
   prepare_search: PrepareSearchArgs;
+  prepare_issues: PrepareIssuesArgs;
   get_sprint_issues: GetSprintIssuesArgs;
   get_issue: GetIssueArgs;
   get_activity: GetActivityArgs;
-  manage_issue: ManageIssueArgs;
   create_issues: CreateIssuesArgs;
   update_issues: UpdateIssuesArgs;
 };
@@ -256,6 +257,18 @@ export type ToolResultMap = {
     rows: Array<Record<string, string>>;
     totalMatched: number;
     hasMore: boolean;
+  };
+  prepare_issues: {
+    preview: Array<{
+      summary: string;
+      description: string;
+      assignee: string;
+      story_points: number | null;
+      sprint_id: number | null;
+      issue_type: string;
+    }>;
+    ready_for_creation: boolean;
+    errors: string[];
   };
   prepare_search: {
     all_team: boolean;
@@ -316,17 +329,6 @@ export type ToolResultMap = {
     };
     total_changes: number;
     changes: ActivityChange[];
-  };
-  manage_issue: {
-    action: "created" | "updated";
-    key: string;
-    url: string;
-    summary: string;
-    issue_type: string;
-    assignee: string | null;
-    sprint: string | null;
-    story_points: number | null;
-    status: string;
   };
   create_issues: {
     total: number;

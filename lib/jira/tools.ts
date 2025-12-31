@@ -5,10 +5,10 @@ export const TOOL_NAMES = [
   "get_context",
   "query_csv",
   "prepare_search",
+  "prepare_issues",
   "get_sprint_issues",
   "get_issue",
   "get_activity",
-  "manage_issue",
   "create_issues",
   "update_issues",
 ] as const;
@@ -59,22 +59,39 @@ Returns: { team_members: ["John Doe", "Jane Smith", ...], statuses: ["To Do", "I
     type: "function",
     function: {
       name: "query_csv",
-      description: `Query the uploaded CSV file. Use this to filter and retrieve data from a CSV the user has uploaded.
-This tool is handled client-side - results come from the browser's memory.
+      description: `Query the uploaded CSV file with flexible filtering options.
 
 Examples:
-- query_csv({}) - get first 50 rows
-- query_csv({ filters: { "VTEX Scope": "In Scope" } }) - filter by column
-- query_csv({ filters: { "3.0 B2B": "Y", "VTEX Scope": "In Scope" }, limit: 100 })
+- query_csv({ rowIndices: [103] }) - get row 103 (user says "row 103")
+- query_csv({ rowIndices: [103, 105, 110] }) - get rows 103, 105, and 110
+- query_csv({ filters: { "Status": "Done" } }) - simple filter
+- query_csv({ filters: { "Description": "store", "Status": "Done" } }) - AND: description contains "store" AND status is "Done"
+- query_csv({ filters: { "Priority": ["High", "Critical"] } }) - OR: priority is "High" OR "Critical"
+- query_csv({ filters: { "Domain": "Catalog", "Phase": ["Q1", "Q2"] } }) - Combined: domain="Catalog" AND (phase="Q1" OR phase="Q2")
 
-Returns: { rows: [...], totalMatched: number, hasMore: boolean }`,
+Filter logic:
+- Multiple keys = AND (all must match)
+- Array values = OR (any must match)
+- String values = case-insensitive partial match (contains)
+
+Returns: { rows: [...], summary: { totalRows, filteredRows, availableFilters } }`,
       parameters: {
         type: "object",
         properties: {
+          rowIndices: {
+            type: "array",
+            items: { type: "number" },
+            description:
+              "Array of row indices (1-based). Use [103] for 'row 103' or [10, 20, 30] for multiple rows.",
+          },
           filters: {
             type: "object",
             description:
-              "Column filters as key-value pairs. Values are case-insensitive partial matches.",
+              "Column filters. Values can be string (contains) or array of strings (any match). Multiple columns = AND.",
+          },
+          offset: {
+            type: "number",
+            description: "Number of rows to skip (default: 0)",
           },
           limit: {
             type: "number",
@@ -219,57 +236,29 @@ Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, c
   {
     type: "function",
     function: {
-      name: "manage_issue",
-      description: `Create or update a Jira issue. ONLY call this AFTER user confirms.
+      name: "prepare_issues",
+      description: `Prepare issues from CSV for Jira creation.
 
-Mode: If issue_key is provided → UPDATE existing issue. Otherwise → CREATE new issue.
+CORRECT call format:
+prepare_issues(row_indices: [45, 66], mapping: {summary_column: "STORY", description_column: "STORY_DESCRIPTION", assignee: "Daniel", story_points: 8})
 
-Examples:
-- manage_issue(summary: "Add cart badge") - create new story
-- manage_issue(issue_key: "PROJ-123", status: "Done") - update status
-- manage_issue(issue_key: "PROJ-123", assignee: "John Doe", story_points: 5) - update assignee and points
-
-Returns: { key, url, summary, issue_type, assignee, sprint, story_points, status }`,
+IMPORTANT: Use "row_indices" (not "rows"), and put column names inside "mapping" object.`,
       parameters: {
         type: "object",
         properties: {
-          issue_key: {
-            type: "string",
+          row_indices: {
+            type: "array",
+            items: { type: "number" },
             description:
-              "Issue key to update (e.g. 'PROJ-123'). Omit to create new issue.",
+              "Row numbers to use (1-based). MUST be named row_indices, not rows.",
           },
-          summary: {
-            type: "string",
+          mapping: {
+            type: "object",
             description:
-              "Issue title/summary (required for create, optional for update)",
-          },
-          description: {
-            type: "string",
-            description: "Detailed description of the issue",
-          },
-          issue_type: {
-            type: "string",
-            description: "Issue type: Story (default) or Bug (create only)",
-          },
-          assignee: {
-            type: "string",
-            description: "Name of the assignee from TEAM MEMBERS list",
-          },
-          sprint_id: {
-            type: "number",
-            description: "Sprint ID (from AVAILABLE SPRINTS)",
-          },
-          story_points: {
-            type: "number",
-            description: "Story point estimate",
-          },
-          status: {
-            type: "string",
-            description:
-              "Target status from AVAILABLE STATUSES (e.g. 'UI Review', 'Concluído')",
+              "Object containing: summary_column, description_column, assignee, story_points, sprint_id, issue_type",
           },
         },
-        required: [],
+        required: ["row_indices", "mapping"],
       },
     },
   },
@@ -277,11 +266,11 @@ Returns: { key, url, summary, issue_type, assignee, sprint, story_points, status
     type: "function",
     function: {
       name: "create_issues",
-      description: `Create multiple issues in bulk. ONLY call this AFTER user confirms.
-Uses Jira's native bulk API (50 issues per batch). Ideal for importing many tasks.
+      description: `Create multiple issues in bulk. Use prepare_issues first when importing from CSV.
+If no sprint_id is specified, issues are automatically added to the ACTIVE sprint.
 
 Example:
-- create_issues(issues: [{summary: "Task 1", assignee: "John"}, {summary: "Task 2"}])
+- create_issues(issues: [{summary: "Actual task title", assignee: "John"}])
 
 Returns: { total, succeeded, failed, results: [{action, key, summary}] }`,
       parameters: {
@@ -311,7 +300,8 @@ Returns: { total, succeeded, failed, results: [{action, key, summary}] }`,
                 },
                 sprint_id: {
                   type: "number",
-                  description: "Sprint ID from AVAILABLE SPRINTS",
+                  description:
+                    "Sprint ID from AVAILABLE SPRINTS (defaults to active sprint if not specified)",
                 },
                 story_points: {
                   type: "number",
@@ -333,11 +323,10 @@ Returns: { total, succeeded, failed, results: [{action, key, summary}] }`,
     type: "function",
     function: {
       name: "update_issues",
-      description: `Update multiple existing issues in bulk. ONLY call this AFTER user confirms.
-Uses parallel API calls with retry logic. Ideal for mass status changes or reassignments.
+      description: `Update multiple existing issues in bulk.
 
 Example:
-- update_issues(issues: [{issue_key: "PROJ-123", status: "Done"}, {issue_key: "PROJ-124", assignee: "Jane"}])
+- update_issues(issues: [{issue_key: "PROJ-123", status: "Done"}])
 
 Returns: { total, succeeded, failed, results: [{action, key, changes}] }`,
       parameters: {

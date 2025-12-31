@@ -1,8 +1,20 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { Message, ReasoningStep, StructuredData, QueryContext } from "@/app/components/chat";
-import type { StreamEvent } from "@/lib/types";
+import {
+  Message,
+  ReasoningStep,
+  StructuredData,
+  QueryContext,
+  PendingAction,
+} from "@/app/components/chat";
+import type { StreamEvent, CSVRow } from "@/lib/types";
+
+function formatToolArgValue(val: unknown): string {
+  if (val === null || val === undefined) return String(val);
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+}
 
 /**
  * Extract filters from a user question using simple pattern matching
@@ -17,10 +29,13 @@ function extractFiltersFromQuestion(question: string): QueryContext {
   }
   
   const statusFilters: string[] = [];
-  if (/\b(done|completed|concluído)\b/i.test(questionLower)) statusFilters.push("done");
+  if (/\b(done|completed|concluído)\b/i.test(questionLower))
+    statusFilters.push("done");
   if (/\b(ui review)\b/i.test(questionLower)) statusFilters.push("ui review");
-  if (/\b(in progress|em progresso)\b/i.test(questionLower)) statusFilters.push("in_progress");
-  if (/\b(blocked|bloqueado)\b/i.test(questionLower)) statusFilters.push("blocked");
+  if (/\b(in progress|em progresso)\b/i.test(questionLower))
+    statusFilters.push("in_progress");
+  if (/\b(blocked|bloqueado)\b/i.test(questionLower))
+    statusFilters.push("blocked");
   if (/\b(in qa)\b/i.test(questionLower)) statusFilters.push("in qa");
   if (/\b(in uat)\b/i.test(questionLower)) statusFilters.push("in uat");
   if (/\b(backlog)\b/i.test(questionLower)) statusFilters.push("backlog");
@@ -42,9 +57,12 @@ function shouldResetHistory(
   
   const currentFilters = extractFiltersFromQuestion(currentQuestion);
   
-  if (currentFilters.status_filters?.length && previousContext.status_filters?.length) {
-    const hasCommonStatus = currentFilters.status_filters.some(
-      (status) => previousContext.status_filters?.includes(status)
+  if (
+    currentFilters.status_filters?.length &&
+    previousContext.status_filters?.length
+  ) {
+    const hasCommonStatus = currentFilters.status_filters.some((status) =>
+      previousContext.status_filters?.includes(status)
     );
     if (!hasCommonStatus) return true;
   }
@@ -56,19 +74,31 @@ export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [reasoning, setReasoning] = useState<ReasoningStep[]>([]);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(
+    null
+  );
   const messagesRef = useRef<Message[]>([]);
   const reasoningRef = useRef<ReasoningStep[]>([]);
   const structuredDataRef = useRef<StructuredData[]>([]);
   const queryContextRef = useRef<QueryContext | undefined>(undefined);
+  const csvDataRef = useRef<CSVRow[] | null>(null);
+  const lastMessagesRef = useRef<
+    Array<{ role: "user" | "assistant"; content: string }>
+  >([]);
+
+  const setCSVData = useCallback((data: CSVRow[] | null) => {
+    csvDataRef.current = data;
+  }, []);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, displayContent?: string) => {
       if (!content.trim() || isLoading) return;
 
       const userMessage: Message = {
         id: crypto.randomUUID(),
         role: "user",
-        content: content.trim(),
+        content: displayContent?.trim() || content.trim(),
+        apiContent: displayContent ? content.trim() : undefined,
         timestamp: new Date(),
       };
 
@@ -86,7 +116,12 @@ export function useChat() {
       setIsLoading(true);
       
       if (resetHistory) {
-        reasoningRef.current = [{ type: "thinking", content: "↻ Context changed, starting fresh query" }];
+        reasoningRef.current = [
+          {
+            type: "thinking",
+            content: "↻ Context changed, starting fresh query",
+          },
+        ];
         setReasoning(reasoningRef.current);
       } else {
         reasoningRef.current = [];
@@ -109,19 +144,32 @@ export function useChat() {
       try {
         const recentMessages = resetHistory 
           ? [userMessage]
-          : updatedMessages.slice(-4);
+          : updatedMessages.slice(-6);
         const historyForApi = recentMessages.map((msg) => ({
           role: msg.role as "user" | "assistant",
-          content: msg.content,
+          content: msg.apiContent || msg.content,
         }));
+
+        lastMessagesRef.current = historyForApi;
+
+        const requestBody: {
+          messages: typeof historyForApi;
+          stream: boolean;
+          csvData?: CSVRow[];
+          confirmedActionId?: string;
+        } = {
+          messages: historyForApi,
+          stream: true,
+        };
+
+        if (csvDataRef.current) {
+          requestBody.csvData = csvDataRef.current;
+        }
 
         const res = await fetch("/api/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: historyForApi,
-            stream: true,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!res.ok) {
@@ -160,35 +208,54 @@ export function useChat() {
               const updateAssistantMessage = (newContent: string) => {
                 setMessages((prevMessages) =>
                   prevMessages.map((msg) =>
-                    msg.id === assistantId ? { ...msg, content: newContent } : msg
+                    msg.id === assistantId
+                      ? { ...msg, content: newContent }
+                      : msg
                   )
                 );
               };
 
               switch (event.type) {
                 case "reasoning":
-                  if (event.content) addReasoningStep({ type: "thinking", content: event.content });
+                  if (event.content)
+                    addReasoningStep({
+                      type: "thinking",
+                      content: event.content,
+                    });
                   break;
 
                 case "tool_call": {
                   if (!event.tool) break;
                   const argsStr = event.arguments
-                    ? ` (${Object.entries(event.arguments).map(([key, value]) => `${key}: ${value}`).join(", ")})`
+                    ? ` (${Object.entries(event.arguments)
+                        .map(([key, value]) => `${key}: ${formatToolArgValue(value)}`)
+                        .join(", ")})`
                     : "";
-                  addReasoningStep({ type: "tool_call", content: `→ ${event.tool}${argsStr}` });
+                  addReasoningStep({
+                    type: "tool_call",
+                    content: `→ ${event.tool}${argsStr}`,
+                  });
                   if (event.tool === "get_sprint_issues" && event.arguments) {
                     const args = event.arguments as Record<string, unknown>;
                     queryContextRef.current = {
                       sprint_ids: args.sprint_ids as number[] | undefined,
-                      status_filters: args.status_filters as string[] | undefined,
-                      assignee_emails: args.assignee_emails as string[] | undefined,
+                      status_filters: args.status_filters as
+                        | string[]
+                        | undefined,
+                      assignee_emails: args.assignee_emails as
+                        | string[]
+                        | undefined,
                     };
                   }
                   break;
                 }
 
                 case "tool_result":
-                  if (event.content) addReasoningStep({ type: "tool_result", content: `← ${event.content}` });
+                  if (event.content)
+                    addReasoningStep({
+                      type: "tool_result",
+                      content: `← ${event.content}`,
+                    });
                   break;
 
                 case "chunk":
@@ -202,7 +269,21 @@ export function useChat() {
                   break;
 
                 case "structured_data":
-                  if (event.data) structuredDataRef.current = [...structuredDataRef.current, event.data as StructuredData];
+                  if (event.data)
+                    structuredDataRef.current = [
+                      ...structuredDataRef.current,
+                      event.data as StructuredData,
+                    ];
+                  break;
+
+                case "confirmation_required":
+                  if (event.pendingAction) {
+                    setPendingAction(event.pendingAction as PendingAction);
+                    addReasoningStep({
+                      type: "thinking",
+                      content: "⏸ Waiting for confirmation...",
+                    });
+                  }
                   break;
 
                 case "done": {
@@ -211,13 +292,21 @@ export function useChat() {
                     role: "assistant" as const,
                     content: assistantContent,
                     timestamp: new Date(),
-                    reasoning: reasoningRef.current.length > 0 ? reasoningRef.current : undefined,
-                    structuredData: structuredDataRef.current.length > 0 ? structuredDataRef.current : undefined,
+                    reasoning:
+                      reasoningRef.current.length > 0
+                        ? reasoningRef.current
+                        : undefined,
+                    structuredData:
+                      structuredDataRef.current.length > 0
+                        ? structuredDataRef.current
+                        : undefined,
                     queryContext: queryContextRef.current,
                   };
                   messagesRef.current = [...messagesRef.current, finalMessage];
                   setMessages((prevMessages) =>
-                    prevMessages.map((msg) => (msg.id === assistantId ? finalMessage : msg))
+                    prevMessages.map((msg) =>
+                      msg.id === assistantId ? finalMessage : msg
+                    )
                   );
                   break;
                 }
@@ -230,7 +319,9 @@ export function useChat() {
           error instanceof Error ? error.message : "Failed to send message";
         setMessages((prevMessages) =>
           prevMessages.map((msg) =>
-            msg.id === assistantId ? { ...msg, content: `Error: ${errorMessage}` } : msg
+            msg.id === assistantId
+              ? { ...msg, content: `Error: ${errorMessage}` }
+              : msg
           )
         );
       } finally {
@@ -247,11 +338,187 @@ export function useChat() {
     setReasoning([]);
   }, []);
 
+  const confirmAction = useCallback(async () => {
+    if (!pendingAction) return;
+
+    setPendingAction(null);
+    setIsLoading(true);
+
+    const requestBody = {
+      executeAction: {
+        toolName: pendingAction.toolName,
+        issues: pendingAction.issues,
+      },
+      stream: true,
+    };
+
+    reasoningRef.current = [
+      ...reasoningRef.current,
+      { type: "thinking", content: "✓ Confirmed, executing..." },
+    ];
+    setReasoning([...reasoningRef.current]);
+
+    try {
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let assistantContent = "";
+      const assistantId =
+        messagesRef.current[messagesRef.current.length - 1]?.id ||
+        crypto.randomUUID();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const event: StreamEvent = JSON.parse(jsonStr);
+
+            switch (event.type) {
+              case "reasoning":
+                if (event.content) {
+                  reasoningRef.current = [
+                    ...reasoningRef.current,
+                    { type: "thinking", content: event.content },
+                  ];
+                  setReasoning([...reasoningRef.current]);
+                }
+                break;
+              case "tool_call": {
+                if (!event.tool) break;
+                const argsStr = event.arguments
+                  ? ` (${Object.entries(event.arguments)
+                      .map(([key, value]) => `${key}: ${formatToolArgValue(value)}`)
+                      .join(", ")})`
+                  : "";
+                reasoningRef.current = [
+                  ...reasoningRef.current,
+                  { type: "tool_call", content: `→ ${event.tool}${argsStr}` },
+                ];
+                setReasoning([...reasoningRef.current]);
+                break;
+              }
+              case "tool_result":
+                if (event.content) {
+                  reasoningRef.current = [
+                    ...reasoningRef.current,
+                    { type: "tool_result", content: `← ${event.content}` },
+                  ];
+                  setReasoning([...reasoningRef.current]);
+                }
+                break;
+              case "chunk":
+                if (!event.content) break;
+                assistantContent += event.content;
+                setMessages((prevMessages) =>
+                  prevMessages.map((msg) =>
+                    msg.id === assistantId
+                      ? { ...msg, content: assistantContent }
+                      : msg
+                  )
+                );
+                break;
+              case "done": {
+                const finalMessage: Message = {
+                  id: assistantId,
+                  role: "assistant",
+                  content: assistantContent,
+                  timestamp: new Date(),
+                  reasoning:
+                    reasoningRef.current.length > 0
+                      ? reasoningRef.current
+                      : undefined,
+                };
+                messagesRef.current = messagesRef.current.map((msg) =>
+                  msg.id === assistantId ? finalMessage : msg
+                );
+                setMessages((prevMessages) =>
+                  prevMessages.map((msg) =>
+                    msg.id === assistantId ? finalMessage : msg
+                  )
+                );
+                break;
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to execute action";
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === messagesRef.current[messagesRef.current.length - 1]?.id
+            ? { ...msg, content: `Error: ${errorMessage}` }
+            : msg
+        )
+      );
+    } finally {
+      setIsLoading(false);
+      setReasoning([]);
+    }
+  }, [pendingAction]);
+
+  const cancelAction = useCallback(() => {
+    setPendingAction(null);
+    setIsLoading(false);
+
+    const updatedReasoning = [
+      ...reasoningRef.current,
+      { type: "thinking" as const, content: "✕ Cancelled by user" },
+    ];
+    reasoningRef.current = updatedReasoning;
+
+    const lastAssistantMsg = messagesRef.current
+      .filter((m) => m.role === "assistant")
+      .pop();
+    if (lastAssistantMsg) {
+      const cancelledMessage: Message = {
+        ...lastAssistantMsg,
+        content: "Action cancelled by user.",
+        reasoning: updatedReasoning,
+      };
+      messagesRef.current = messagesRef.current.map((msg) =>
+        msg.id === lastAssistantMsg.id ? cancelledMessage : msg
+      );
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === lastAssistantMsg.id ? cancelledMessage : msg
+        )
+      );
+    }
+
+    setReasoning([]);
+  }, []);
+
   return {
     messages,
     isLoading,
     reasoning,
+    pendingAction,
     sendMessage,
     clearMessages,
+    setCSVData,
+    confirmAction,
+    cancelAction,
   };
 }

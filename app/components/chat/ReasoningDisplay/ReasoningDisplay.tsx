@@ -24,8 +24,8 @@ export function ReasoningDisplay({ steps }: ReasoningDisplayProps) {
                 step.type === "tool_call"
                   ? "text-[var(--blue)] opacity-70"
                   : step.type === "tool_result"
-                    ? "text-[var(--green)] opacity-70"
-                    : "opacity-50"
+                  ? "text-[var(--green)] opacity-70"
+                  : "opacity-50"
               }`}
             >
               {step.type === "thinking" && (
@@ -43,4 +43,3 @@ export function ReasoningDisplay({ steps }: ReasoningDisplayProps) {
     </div>
   );
 }
-

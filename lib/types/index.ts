@@ -4,6 +4,9 @@ export type {
   ToolResponse,
   ExecuteRequest,
   ToolCallInput,
+  CSVRow,
+  PendingAction,
+  ExecuteActionPayload,
 } from "./api";
 
 export type { ChatMessage, ToolCall, OllamaResponse } from "./ollama";

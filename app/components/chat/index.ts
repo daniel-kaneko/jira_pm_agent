@@ -10,8 +10,12 @@ export { EmptyState } from "./EmptyState";
 export { ChatInput } from "./ChatInput";
 export { ThemeSelector } from "./ThemeSelector";
 export { ReasoningDisplay } from "./ReasoningDisplay";
+export { CSVUpload } from "./CSVUpload";
+export { ConfirmationCard } from "./ConfirmationCard";
+export type { PendingAction } from "./ConfirmationCard";
 
 export type { Message, Source, ReasoningStep, StructuredData, QueryContext } from "./types";
+export type { CSVUploadProps } from "./CSVUpload";
 export { IssueListCard } from "./IssueListCard";
 export type { IssueListData, IssueData } from "./IssueListCard";
 export { SprintComparisonCard } from "./SprintComparisonCard";

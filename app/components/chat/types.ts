@@ -46,8 +46,10 @@ export interface Message {
   id: string;
   /** Role of the message sender */
   role: "user" | "assistant";
-  /** Text content of the message */
+  /** Text content of the message (displayed in UI) */
   content: string;
+  /** Content sent to API (if different from display content) */
+  apiContent?: string;
   /** Timestamp when the message was created */
   timestamp: Date;
   /** Sources used for assistant responses */

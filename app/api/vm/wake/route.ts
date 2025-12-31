@@ -25,8 +25,9 @@ async function getVMStatus(): Promise<VMStatus> {
   );
 
   const powerState =
-    instanceView.statuses?.find((status) => status.code?.startsWith("PowerState/"))?.code ||
-    "Unknown";
+    instanceView.statuses?.find((status) =>
+      status.code?.startsWith("PowerState/")
+    )?.code || "Unknown";
 
   return {
     isRunning: powerState === "PowerState/running",
@@ -62,45 +63,44 @@ async function waitForOllama(maxWaitMs = 120000): Promise<boolean> {
       if (response.ok) {
         return true;
       }
-    } catch {
-      // Ollama not ready yet
-    }
+    } catch {}
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
   }
   return false;
 }
 
 export async function GET(): Promise<Response> {
-  // Check if Azure config is set
   if (!AZURE_SUBSCRIPTION_ID || !AZURE_RESOURCE_GROUP || !AZURE_VM_NAME) {
     return NextResponse.json(
       {
         error: "Azure VM configuration not set",
-        required: ["AZURE_SUBSCRIPTION_ID", "AZURE_RESOURCE_GROUP", "AZURE_VM_NAME"],
+        required: [
+          "AZURE_SUBSCRIPTION_ID",
+          "AZURE_RESOURCE_GROUP",
+          "AZURE_VM_NAME",
+        ],
       },
       { status: 500 }
     );
   }
 
   try {
-    // Get current VM status
     const status = await getVMStatus();
 
     if (status.isRunning) {
-      // VM is already running, check if Ollama is ready
-      const ollamaReady = await waitForOllama(10000); // Quick check
+      const ollamaReady = await waitForOllama(10000);
       return NextResponse.json({
         status: "running",
         ollamaReady,
-        message: ollamaReady ? "VM and Ollama are ready" : "VM running, Ollama starting...",
+        message: ollamaReady
+          ? "VM and Ollama are ready"
+          : "VM running, Ollama starting...",
       });
     }
 
-    // VM is not running, start it
     console.log(`[VM] Starting VM: ${AZURE_VM_NAME}`);
     await startVM();
 
-    // Wait for Ollama to be ready
     console.log("[VM] Waiting for Ollama to be ready...");
     const ollamaReady = await waitForOllama();
 
@@ -124,7 +124,5 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(): Promise<Response> {
-  // POST is same as GET for convenience
   return GET();
 }
-

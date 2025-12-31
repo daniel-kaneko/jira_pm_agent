@@ -2,10 +2,9 @@
 
 import React, { createContext, useContext, useState, useCallback } from "react";
 import Papa from "papaparse";
+import type { CSVRow } from "@/lib/types";
 
-export interface CSVRow {
-  [key: string]: string;
-}
+export type { CSVRow };
 
 export interface CSVSummary {
   fileName: string;
@@ -15,14 +14,19 @@ export interface CSVSummary {
   columnStats: Record<string, { uniqueValues: string[]; count: number }>;
 }
 
+interface LoadCSVResult {
+  summary: CSVSummary;
+  rows: CSVRow[];
+  aiMessage: string;
+}
+
 interface CSVContextType {
   csvData: CSVRow[] | null;
   csvSummary: CSVSummary | null;
   isLoading: boolean;
   error: string | null;
-  loadCSV: (file: File) => Promise<CSVSummary>;
+  loadCSV: (file: File) => Promise<LoadCSVResult>;
   clearCSV: () => void;
-  queryCSV: (filters: Record<string, string>, limit?: number) => CSVRow[];
   getCSVForAI: () => string;
 }
 
@@ -34,7 +38,27 @@ export function CSVProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadCSV = useCallback(async (file: File): Promise<CSVSummary> => {
+  const generateAIMessage = (summary: CSVSummary): string => {
+    const filterableColumns = Object.entries(summary.columnStats)
+      .filter(([, stats]) => stats.count <= 20)
+      .map(([col, stats]) => `  - ${col}: ${stats.uniqueValues.join(", ")}`)
+      .join("\n");
+
+    return `CSV Uploaded: "${summary.fileName}"
+- Total rows: ${summary.rowCount}
+- Columns: ${summary.columns.join(", ")}
+
+Filterable columns (with unique values):
+${filterableColumns}
+
+Sample data (first 3 rows):
+${summary.sampleRows
+  .slice(0, 3)
+  .map((row) => JSON.stringify(row))
+  .join("\n")}`;
+  };
+
+  const loadCSV = useCallback(async (file: File): Promise<LoadCSVResult> => {
     setIsLoading(true);
     setError(null);
 
@@ -69,7 +93,12 @@ export function CSVProvider({ children }: { children: React.ReactNode }) {
           setCsvData(rows);
           setCsvSummary(summary);
           setIsLoading(false);
-          resolve(summary);
+
+          resolve({
+            summary,
+            rows,
+            aiMessage: generateAIMessage(summary),
+          });
         },
         error: (err) => {
           setError(err.message);
@@ -85,23 +114,6 @@ export function CSVProvider({ children }: { children: React.ReactNode }) {
     setCsvSummary(null);
     setError(null);
   }, []);
-
-  const queryCSV = useCallback(
-    (filters: Record<string, string>, limit = 50): CSVRow[] => {
-      if (!csvData) return [];
-
-      let filtered = csvData;
-      Object.entries(filters).forEach(([column, value]) => {
-        if (!value) return;
-        filtered = filtered.filter((row) =>
-          row[column]?.toLowerCase().includes(value.toLowerCase())
-        );
-      });
-
-      return filtered.slice(0, limit);
-    },
-    [csvData]
-  );
 
   const getCSVForAI = useCallback((): string => {
     if (!csvSummary) return "";
@@ -136,7 +148,6 @@ You can use query_csv to filter this data, then create_issues to bulk create Jir
         error,
         loadCSV,
         clearCSV,
-        queryCSV,
         getCSVForAI,
       }}
     >
@@ -152,4 +163,3 @@ export function useCSV() {
   }
   return context;
 }
-

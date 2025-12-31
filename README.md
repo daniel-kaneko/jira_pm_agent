@@ -118,7 +118,6 @@ The agent uses an **Agentic RAG** approach - the AI dynamically retrieves contex
 
 | Tool            | Description                                             |
 | --------------- | ------------------------------------------------------- |
-| `manage_issue`  | Create or update a single issue                         |
 | `create_issues` | Bulk create issues (uses native Jira API, 50 per batch) |
 | `update_issues` | Bulk update issues (parallel with retry logic)          |
 
@@ -193,14 +192,13 @@ jira-pm-agent/
 │   │   ├── chat/             # Chat UI components
 │   │   │   ├── IssueListCard/    # Interactive issue table
 │   │   │   ├── SprintComparisonCard/ # Multi-sprint comparison
+│   │   │   ├── CSVUpload/        # CSV upload with validation
 │   │   │   └── ...
 │   │   └── themes/           # Theme visual effects
 │   ├── login/                # Login page
 │   ├── globals.css           # Global styles & themes
 │   ├── layout.tsx            # Root layout
 │   └── page.tsx              # Main page
-├── components/
-│   └── CSVUpload.tsx         # CSV upload button component
 ├── contexts/
 │   └── CSVContext.tsx        # CSV state management (client-side)
 ├── hooks/

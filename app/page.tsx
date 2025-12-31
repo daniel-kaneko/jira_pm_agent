@@ -9,6 +9,8 @@ import {
   ThemeSelector,
   ReasoningDisplay,
   Theme,
+  CSVUpload,
+  ConfirmationCard,
 } from "./components/chat";
 import {
   MatrixRain,
@@ -21,13 +23,24 @@ import {
   SakuraEffect,
 } from "./components/themes";
 import { useChat } from "@/hooks/useChat";
-import { CSVUpload } from "@/components/CSVUpload";
+import { useCSV, type CSVRow } from "@/contexts/CSVContext";
 
 export default function Home() {
-  const { messages, isLoading, reasoning, sendMessage } = useChat();
+  const {
+    messages,
+    isLoading,
+    reasoning,
+    pendingAction,
+    sendMessage,
+    setCSVData,
+    confirmAction,
+    cancelAction,
+  } = useChat();
+  const { csvData } = useCSV();
   const [input, setInput] = useState("");
   const [theme, setTheme] = useState<Theme>("grey");
   const [effectsEnabled, setEffectsEnabled] = useState(false);
+  const [csvUploading, setCsvUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,6 +74,10 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading, reasoning]);
 
+  useEffect(() => {
+    setCSVData(csvData);
+  }, [csvData, setCSVData]);
+
   const handleSubmit = async () => {
     if (!input.trim() || isLoading) return;
     const content = input.trim();
@@ -68,8 +85,16 @@ export default function Home() {
     await sendMessage(content);
   };
 
-  const handleCSVUpload = async (summary: string) => {
-    await sendMessage(`[CSV Uploaded]\n${summary}`);
+  const handleCSVUpload = async (summary: string, rows: CSVRow[]) => {
+    setCsvUploading(true);
+    try {
+      setCSVData(rows);
+      const apiMessage = `[CSV Uploaded - STOP! Do NOT call any tools. Just list the columns and ask what I want to do.]\n${summary}`;
+      const displayMessage = `📎 CSV uploaded`;
+      await sendMessage(apiMessage, displayMessage);
+    } finally {
+      setCsvUploading(false);
+    }
   };
 
   return (
@@ -109,7 +134,8 @@ export default function Home() {
             <div>
               {messages.map((message, index) => {
                 const isLastMessage = index === messages.length - 1;
-                const showThinking = isLoading && isLastMessage && reasoning.length === 0;
+                const showThinking =
+                  isLoading && isLastMessage && reasoning.length === 0;
                 return (
                   <MessageBubble
                     key={message.id}
@@ -121,6 +147,45 @@ export default function Home() {
               {isLoading && reasoning.length > 0 && (
                 <ReasoningDisplay steps={reasoning} />
               )}
+              {csvUploading && (
+                <div className="py-3 px-4 animate-fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 max-w-[200px] h-1 bg-[var(--bg-highlight)] rounded overflow-hidden">
+                      <div
+                        className="h-full w-[40%] rounded"
+                        style={{
+                          background:
+                            "linear-gradient(90deg, var(--accent, #3b82f6), var(--green, #10b981))",
+                          animation: "loading-slide 1s ease-in-out infinite",
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs text-[var(--fg-muted)] font-mono opacity-70">
+                      Processing CSV...
+                    </span>
+                  </div>
+                  <style jsx>{`
+                    @keyframes loading-slide {
+                      0% {
+                        transform: translateX(-100%);
+                      }
+                      50% {
+                        transform: translateX(150%);
+                      }
+                      100% {
+                        transform: translateX(400%);
+                      }
+                    }
+                  `}</style>
+                </div>
+              )}
+              {pendingAction && (
+                <ConfirmationCard
+                  action={pendingAction}
+                  onConfirm={confirmAction}
+                  onCancel={cancelAction}
+                />
+              )}
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -131,9 +196,12 @@ export default function Home() {
         value={input}
         onChange={setInput}
         onSubmit={handleSubmit}
-        isLoading={isLoading}
+        isLoading={isLoading || csvUploading || !!pendingAction}
         leftActions={
-          <CSVUpload onUploadComplete={handleCSVUpload} disabled={isLoading} />
+          <CSVUpload
+            onUploadComplete={handleCSVUpload}
+            disabled={isLoading || !!pendingAction}
+          />
         }
       />
     </div>

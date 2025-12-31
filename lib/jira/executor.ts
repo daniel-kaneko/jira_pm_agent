@@ -5,6 +5,7 @@ import {
   getCachedData,
 } from "./cache";
 import { JIRA_CONFIG } from "../constants";
+import { TOOL_NAMES } from "./tools";
 import type {
   ToolName,
   ToolResultMap,
@@ -21,7 +22,6 @@ type PrepareSearchResult = ToolResultMap["prepare_search"];
 type GetSprintIssuesResult = ToolResultMap["get_sprint_issues"];
 type GetIssueResult = ToolResultMap["get_issue"];
 type GetActivityResult = ToolResultMap["get_activity"];
-type ManageIssueResult = ToolResultMap["manage_issue"];
 type CreateIssuesResult = ToolResultMap["create_issues"];
 type UpdateIssuesResult = ToolResultMap["update_issues"];
 
@@ -472,107 +472,6 @@ async function moveToSprintIfNeeded(
   return sprint?.name || `Sprint ${sprintId}`;
 }
 
-async function handleManageIssue(
-  args: Record<string, unknown>
-): Promise<ManageIssueResult> {
-  const issue_key = args.issue_key as string | undefined;
-  const summary = args.summary as string | undefined;
-  const description = args.description as string | undefined;
-  const issue_type = (args.issue_type as string | undefined) || "Story";
-  const assignee = args.assignee as string | undefined;
-  const sprint_id = args.sprint_id as number | undefined;
-  const story_points = args.story_points as number | undefined;
-  const status = args.status as string | undefined;
-
-  if (!JIRA_CONFIG.boardId) {
-    throw new Error("DEFAULT_BOARD_ID not configured in environment");
-  }
-
-  const [boardInfo, storyPointsFieldId, cachedTeam] = await Promise.all([
-    jiraClient.getBoardInfo(JIRA_CONFIG.boardId),
-    getStoryPointsFieldId(),
-    getCachedTeamMembers(),
-  ]);
-
-  const assigneeEmail = assignee
-    ? resolveName(assignee, cachedTeam, { strict: true })
-    : undefined;
-
-  const isUpdate = !!issue_key;
-
-  if (isUpdate) {
-    const existingIssue = await jiraClient.getIssue(
-      issue_key,
-      storyPointsFieldId
-    );
-
-    await jiraClient.updateIssue({
-      issueKey: issue_key,
-      summary,
-      description,
-      assigneeEmail,
-      storyPoints: story_points,
-      storyPointsFieldId,
-    });
-
-    const sprintName = await moveToSprintIfNeeded(
-      issue_key,
-      sprint_id,
-      JIRA_CONFIG.boardId
-    );
-    const finalStatus = await transitionIfNeeded(
-      issue_key,
-      status,
-      existingIssue.status
-    );
-
-    return {
-      action: "updated",
-      key: issue_key,
-      url: `${JIRA_CONFIG.baseUrl}/browse/${issue_key}`,
-      summary: summary || existingIssue.summary,
-      issue_type: existingIssue.issue_type,
-      assignee: assigneeEmail || existingIssue.assignee,
-      sprint: sprintName,
-      story_points: story_points ?? existingIssue.story_points,
-      status: finalStatus,
-    };
-  }
-
-  if (!summary) {
-    throw new Error("summary is required for creating new issues");
-  }
-
-  const createdIssue = await jiraClient.createIssue({
-    projectKey: boardInfo.project_key,
-    summary,
-    description,
-    issueType: issue_type,
-    assigneeEmail,
-    storyPoints: story_points,
-    storyPointsFieldId,
-  });
-
-  const sprintName = await moveToSprintIfNeeded(
-    createdIssue.key,
-    sprint_id,
-    JIRA_CONFIG.boardId
-  );
-  const finalStatus = await transitionIfNeeded(createdIssue.key, status);
-
-  return {
-    action: "created",
-    key: createdIssue.key,
-    url: createdIssue.url,
-    summary,
-    issue_type,
-    assignee: assigneeEmail || null,
-    sprint: sprintName,
-    story_points: story_points || null,
-    status: finalStatus,
-  };
-}
-
 const RETRY_DELAY_MS = 1000;
 const MAX_RETRIES = 3;
 
@@ -607,11 +506,15 @@ async function handleCreateIssues(
     throw new Error("DEFAULT_BOARD_ID not configured in environment");
   }
 
-  const [boardInfo, storyPointsFieldId, cachedTeam] = await Promise.all([
-    jiraClient.getBoardInfo(JIRA_CONFIG.boardId),
-    getStoryPointsFieldId(),
-    getCachedTeamMembers(),
-  ]);
+  const [boardInfo, storyPointsFieldId, cachedTeam, sprints] =
+    await Promise.all([
+      jiraClient.getBoardInfo(JIRA_CONFIG.boardId),
+      getStoryPointsFieldId(),
+      getCachedTeamMembers(),
+      jiraClient.listSprints(JIRA_CONFIG.boardId, "active", 1),
+    ]);
+
+  const activeSprintId = sprints.length > 0 ? sprints[0].id : null;
 
   const preparedIssues = await Promise.all(
     issues.map(async (issue) => {
@@ -645,12 +548,11 @@ async function handleCreateIssues(
     const originalIssue = issues[resultIndex];
 
     if (result.status === "created" && result.key) {
-      if (originalIssue.sprint_id) {
+      const targetSprintId = originalIssue.sprint_id ?? activeSprintId;
+      if (targetSprintId) {
         try {
           await withRetry(() =>
-            jiraClient.moveIssuesToSprint(originalIssue.sprint_id!, [
-              result.key!,
-            ])
+            jiraClient.moveIssuesToSprint(targetSprintId, [result.key!])
           );
         } catch {}
       }
@@ -855,7 +757,6 @@ export async function executeJiraTool(
   | GetSprintIssuesResult
   | GetIssueResult
   | GetActivityResult
-  | ManageIssueResult
   | CreateIssuesResult
   | UpdateIssuesResult
 > {
@@ -880,9 +781,6 @@ export async function executeJiraTool(
     case "get_activity":
       return handleGetActivity(args);
 
-    case "manage_issue":
-      return handleManageIssue(args);
-
     case "create_issues":
       return handleCreateIssues(args);
 
@@ -895,16 +793,5 @@ export async function executeJiraTool(
 }
 
 export function isValidToolName(name: string): name is ToolName {
-  const validTools: ToolName[] = [
-    "list_sprints",
-    "get_context",
-    "prepare_search",
-    "get_sprint_issues",
-    "get_issue",
-    "get_activity",
-    "manage_issue",
-    "create_issues",
-    "update_issues",
-  ];
-  return validTools.includes(name as ToolName);
+  return (TOOL_NAMES as readonly string[]).includes(name);
 }

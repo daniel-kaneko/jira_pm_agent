@@ -32,6 +32,8 @@ export function ChatInput({
     target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
   };
 
+  const canSend = value.trim().length > 0 && !isLoading;
+
   return (
     <footer className="shrink-0 bg-[var(--bg-soft)] border-t border-[var(--bg-highlight)]">
       <div className="max-w-4xl mx-auto">
@@ -51,7 +53,32 @@ export function ChatInput({
             className="flex-1 bg-transparent resize-none outline-none text-[var(--fg)] placeholder:text-[var(--fg-muted)] py-2 disabled:opacity-50"
             style={{ minHeight: "24px", height: "auto" }}
           />
-          {leftActions}
+          <div className="flex items-center gap-1 py-1">
+            <button
+              onClick={onSubmit}
+              disabled={!canSend}
+              className="p-2 rounded-md transition-colors hover:bg-[var(--bg-highlight)] disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Send message"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={
+                  canSend ? "text-[var(--green)]" : "text-[var(--fg-muted)]"
+                }
+              >
+                <path d="M22 2L11 13" />
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+              </svg>
+            </button>
+            {leftActions}
+          </div>
         </div>
         <div className="px-4 pb-2 text-xs text-[var(--fg-muted)] flex justify-between">
           <span>

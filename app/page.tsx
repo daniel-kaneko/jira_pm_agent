@@ -21,9 +21,12 @@ import {
   SakuraEffect,
 } from "./components/themes";
 import { useChat } from "@/hooks/useChat";
+import { CSVUpload } from "@/components/CSVUpload";
+import { useCSV } from "@/contexts/CSVContext";
 
 export default function Home() {
   const { messages, isLoading, reasoning, sendMessage } = useChat();
+  const { csvSummary } = useCSV();
   const [input, setInput] = useState("");
   const [theme, setTheme] = useState<Theme>("grey");
   const [effectsEnabled, setEffectsEnabled] = useState(false);
@@ -65,6 +68,10 @@ export default function Home() {
     const content = input.trim();
     setInput("");
     await sendMessage(content);
+  };
+
+  const handleCSVUpload = async (summary: string) => {
+    await sendMessage(`[CSV Uploaded]\n${summary}`);
   };
 
   return (
@@ -127,6 +134,9 @@ export default function Home() {
         onChange={setInput}
         onSubmit={handleSubmit}
         isLoading={isLoading}
+        leftActions={
+          <CSVUpload onUploadComplete={handleCSVUpload} disabled={isLoading} />
+        }
       />
     </div>
   );

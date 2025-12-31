@@ -1,18 +1,29 @@
 import { jiraClient } from "./client";
-import { getCachedTeamMembers, getStoryPointsFieldId } from "./cache";
+import {
+  getCachedTeamMembers,
+  getStoryPointsFieldId,
+  getCachedData,
+} from "./cache";
 import { JIRA_CONFIG } from "../constants";
 import type {
   ToolName,
   ToolResultMap,
   JiraSprintIssues,
   TeamMember,
+  ActivityChange,
+  IssueToCreate,
+  IssueToUpdate,
+  BulkOperationResult,
 } from "./types";
 import type { ToolCallInput } from "../types";
 
 type PrepareSearchResult = ToolResultMap["prepare_search"];
 type GetSprintIssuesResult = ToolResultMap["get_sprint_issues"];
 type GetIssueResult = ToolResultMap["get_issue"];
+type GetActivityResult = ToolResultMap["get_activity"];
 type ManageIssueResult = ToolResultMap["manage_issue"];
+type CreateIssuesResult = ToolResultMap["create_issues"];
+type UpdateIssuesResult = ToolResultMap["update_issues"];
 
 interface ResolveNameOptions {
   strict?: boolean;
@@ -313,6 +324,107 @@ async function handleGetIssue(
 }
 
 /**
+ * Parse an ISO date string into a Date.
+ * @param since - ISO date 'YYYY-MM-DD'.
+ * @returns The parsed Date.
+ */
+function parseSinceDate(since: string): Date {
+  const parsed = new Date(since);
+  if (isNaN(parsed.getTime())) {
+    throw new Error(`Invalid date format: "${since}". Use YYYY-MM-DD.`);
+  }
+  return parsed;
+}
+
+async function handleGetActivity(
+  args: Record<string, unknown>
+): Promise<GetActivityResult> {
+  const sprint_ids = args.sprint_ids as number[] | undefined;
+  const since = args.since as string | undefined;
+  const to_status = args.to_status as string | undefined;
+  const assignees = args.assignees as string[] | undefined;
+
+  if (!sprint_ids || sprint_ids.length === 0) {
+    throw new Error("sprint_ids is required");
+  }
+
+  if (!since) {
+    throw new Error("since is required (use YYYY-MM-DD format)");
+  }
+
+  const boardSprints = await jiraClient.listSprints(
+    JIRA_CONFIG.boardId!,
+    "all",
+    50
+  );
+  validateSprintIds(sprint_ids, boardSprints);
+
+  const sinceDate = parseSinceDate(since);
+  const untilDate = new Date();
+
+  const [cachedTeam, issuesWithChangelogs] = await Promise.all([
+    getCachedTeamMembers(),
+    jiraClient.getSprintChangelogs(sprint_ids, sinceDate),
+  ]);
+
+  const resolvedAssignees = assignees?.map((name) =>
+    resolveName(name, cachedTeam).toLowerCase()
+  );
+
+  const changes: ActivityChange[] = [];
+
+  for (const issue of issuesWithChangelogs) {
+    for (const historyEntry of issue.changelog) {
+      for (const item of historyEntry.items) {
+        if (item.field.toLowerCase() !== "status") continue;
+
+        if (to_status && item.to?.toLowerCase() !== to_status.toLowerCase()) {
+          continue;
+        }
+
+        if (resolvedAssignees && issue.assignee) {
+          const issueAssigneeLower = issue.assignee.toLowerCase();
+          const matchesAssignee = resolvedAssignees.some(
+            (a) =>
+              issueAssigneeLower.includes(a) || a.includes(issueAssigneeLower)
+          );
+          if (!matchesAssignee) continue;
+        }
+
+        changes.push({
+          issue_key: issue.key,
+          summary: issue.summary,
+          field: "status",
+          from: item.from,
+          to: item.to,
+          changed_by: historyEntry.author,
+          changed_at: historyEntry.created,
+        });
+      }
+    }
+  }
+
+  changes.sort(
+    (a, b) =>
+      new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
+  );
+
+  return {
+    period: {
+      since: sinceDate.toISOString().split("T")[0],
+      until: untilDate.toISOString().split("T")[0],
+    },
+    filters_applied: {
+      sprint_ids,
+      to_status: to_status || null,
+      assignees: assignees || null,
+    },
+    total_changes: changes.length,
+    changes,
+  };
+}
+
+/**
  * Transition an issue to a target status if specified and not already there.
  */
 async function transitionIfNeeded(
@@ -458,17 +570,305 @@ async function handleManageIssue(
   };
 }
 
+const RETRY_DELAY_MS = 1000;
+const MAX_RETRIES = 3;
+
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 429 && i < MAX_RETRIES - 1) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, i))
+        );
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
+async function handleCreateIssues(
+  args: Record<string, unknown>
+): Promise<CreateIssuesResult> {
+  const issues = args.issues as IssueToCreate[] | undefined;
+
+  if (!issues || issues.length === 0) {
+    throw new Error("issues array is required and cannot be empty");
+  }
+
+  if (!JIRA_CONFIG.boardId) {
+    throw new Error("DEFAULT_BOARD_ID not configured in environment");
+  }
+
+  const [boardInfo, storyPointsFieldId, cachedTeam] = await Promise.all([
+    jiraClient.getBoardInfo(JIRA_CONFIG.boardId),
+    getStoryPointsFieldId(),
+    getCachedTeamMembers(),
+  ]);
+
+  const preparedIssues = await Promise.all(
+    issues.map(async (issue) => {
+      let assigneeAccountId: string | undefined;
+      if (issue.assignee) {
+        const email = resolveName(issue.assignee, cachedTeam, { strict: true });
+        assigneeAccountId = await jiraClient.getAccountIdByEmail(email);
+      }
+      return {
+        summary: issue.summary,
+        description: issue.description,
+        issueType: issue.issue_type || "Story",
+        assigneeAccountId,
+        storyPoints: issue.story_points,
+      };
+    })
+  );
+
+  const bulkResults = await jiraClient.bulkCreateIssues(
+    preparedIssues,
+    boardInfo.project_key,
+    storyPointsFieldId
+  );
+
+  const results: BulkOperationResult[] = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  for (let i = 0; i < bulkResults.length; i++) {
+    const result = bulkResults[i];
+    const originalIssue = issues[i];
+
+    if (result.status === "created" && result.key) {
+      if (originalIssue.sprint_id) {
+        try {
+          await withRetry(() =>
+            jiraClient.moveIssuesToSprint(originalIssue.sprint_id!, [
+              result.key!,
+            ])
+          );
+        } catch {
+          /* ignore sprint move errors */
+        }
+      }
+      if (originalIssue.status && originalIssue.status !== "Backlog") {
+        try {
+          await withRetry(() =>
+            transitionIfNeeded(result.key!, originalIssue.status)
+          );
+        } catch {
+          /* ignore transition errors */
+        }
+      }
+
+      results.push({
+        action: "created",
+        key: result.key,
+        summary: result.summary,
+      });
+      succeeded++;
+    } else {
+      results.push({
+        action: "error",
+        summary: result.summary,
+        error: result.error || "Unknown error",
+      });
+      failed++;
+    }
+  }
+
+  return {
+    total: issues.length,
+    succeeded,
+    failed,
+    results,
+  };
+}
+
+async function handleUpdateIssues(
+  args: Record<string, unknown>
+): Promise<UpdateIssuesResult> {
+  const issues = args.issues as IssueToUpdate[] | undefined;
+
+  if (!issues || issues.length === 0) {
+    throw new Error("issues array is required and cannot be empty");
+  }
+
+  if (!JIRA_CONFIG.boardId) {
+    throw new Error("DEFAULT_BOARD_ID not configured in environment");
+  }
+
+  const [storyPointsFieldId, cachedTeam] = await Promise.all([
+    getStoryPointsFieldId(),
+    getCachedTeamMembers(),
+  ]);
+
+  const results: BulkOperationResult[] = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  const updatePromises = issues.map(async (issue) => {
+    try {
+      const changes: string[] = [];
+
+      let assigneeEmail: string | undefined;
+      if (issue.assignee) {
+        assigneeEmail = resolveName(issue.assignee, cachedTeam, {
+          strict: true,
+        });
+        changes.push(`assignee → ${issue.assignee}`);
+      }
+
+      const hasFieldUpdates =
+        issue.summary ||
+        issue.description ||
+        assigneeEmail ||
+        issue.story_points !== undefined;
+
+      if (hasFieldUpdates) {
+        await withRetry(() =>
+          jiraClient.updateIssue({
+            issueKey: issue.issue_key,
+            summary: issue.summary,
+            description: issue.description,
+            assigneeEmail,
+            storyPoints: issue.story_points,
+            storyPointsFieldId,
+          })
+        );
+
+        if (issue.summary) changes.push(`summary → "${issue.summary}"`);
+        if (issue.story_points !== undefined)
+          changes.push(`points → ${issue.story_points}`);
+      }
+
+      if (issue.sprint_id) {
+        await withRetry(() =>
+          jiraClient.moveIssuesToSprint(issue.sprint_id!, [issue.issue_key])
+        );
+        changes.push(`sprint → ${issue.sprint_id}`);
+      }
+
+      if (issue.status) {
+        const newStatus = await withRetry(() =>
+          transitionIfNeeded(issue.issue_key, issue.status)
+        );
+        changes.push(`status → ${newStatus}`);
+      }
+
+      return {
+        action: "updated" as const,
+        key: issue.issue_key,
+        changes,
+      };
+    } catch (err) {
+      return {
+        action: "error" as const,
+        key: issue.issue_key,
+        error: err instanceof Error ? err.message : "Unknown error",
+      };
+    }
+  });
+
+  const settledResults = await Promise.allSettled(updatePromises);
+
+  for (const settled of settledResults) {
+    if (settled.status === "fulfilled") {
+      const result = settled.value;
+      if (result.action === "updated") {
+        succeeded++;
+      } else {
+        failed++;
+      }
+      results.push(result);
+    } else {
+      failed++;
+      results.push({
+        action: "error",
+        error: settled.reason?.message || "Unknown error",
+      });
+    }
+  }
+
+  return {
+    total: issues.length,
+    succeeded,
+    failed,
+    results,
+  };
+}
+
+interface ListSprintsResult {
+  sprints: Array<{ id: number; name: string; state: string }>;
+  hint: string;
+}
+
+async function handleListSprints(
+  args: Record<string, unknown>
+): Promise<ListSprintsResult> {
+  const state = (args.state as string) || "all";
+  const limit = (args.limit as number) || 20;
+
+  if (!JIRA_CONFIG.boardId) {
+    throw new Error("JIRA_BOARD_ID not configured");
+  }
+
+  const filterState =
+    state === "all" ? "all" : (state as "active" | "closed" | "future");
+  const sprints = await jiraClient.listSprints(
+    JIRA_CONFIG.boardId,
+    filterState,
+    limit
+  );
+
+  return {
+    sprints: sprints.map((s) => ({
+      id: s.id,
+      name: s.name,
+      state: s.state,
+    })),
+    hint: "Use the 'id' number (e.g., 9887) when calling get_sprint_issues. When user says 'sprint 24', find 'Sprint 24' above and use its id.",
+  };
+}
+
+interface GetContextResult {
+  team_members: string[];
+  statuses: string[];
+}
+
+async function handleGetContext(): Promise<GetContextResult> {
+  const cachedData = await getCachedData();
+
+  return {
+    team_members: cachedData.teamMembers.map((m) => m.name),
+    statuses: cachedData.statuses,
+  };
+}
+
 export async function executeJiraTool(
   toolCall: ToolCallInput
 ): Promise<
+  | ListSprintsResult
+  | GetContextResult
   | PrepareSearchResult
   | GetSprintIssuesResult
   | GetIssueResult
+  | GetActivityResult
   | ManageIssueResult
+  | CreateIssuesResult
+  | UpdateIssuesResult
 > {
   const { name, arguments: args } = toolCall;
 
   switch (name as ToolName) {
+    case "list_sprints":
+      return handleListSprints(args);
+
+    case "get_context":
+      return handleGetContext();
+
     case "prepare_search":
       return handlePrepareSearch(args);
 
@@ -478,8 +878,17 @@ export async function executeJiraTool(
     case "get_issue":
       return handleGetIssue(args);
 
+    case "get_activity":
+      return handleGetActivity(args);
+
     case "manage_issue":
       return handleManageIssue(args);
+
+    case "create_issues":
+      return handleCreateIssues(args);
+
+    case "update_issues":
+      return handleUpdateIssues(args);
 
     default:
       throw new Error(`Unknown tool: ${name}`);
@@ -488,10 +897,15 @@ export async function executeJiraTool(
 
 export function isValidToolName(name: string): name is ToolName {
   const validTools: ToolName[] = [
+    "list_sprints",
+    "get_context",
     "prepare_search",
     "get_sprint_issues",
     "get_issue",
+    "get_activity",
     "manage_issue",
+    "create_issues",
+    "update_issues",
   ];
   return validTools.includes(name as ToolName);
 }

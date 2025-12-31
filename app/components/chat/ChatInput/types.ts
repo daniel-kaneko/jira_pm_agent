@@ -3,6 +3,8 @@
  * @module chat/ChatInput/types
  */
 
+import { ReactNode } from "react";
+
 /**
  * Props for the ChatInput component
  */
@@ -19,5 +21,7 @@ export interface ChatInputProps {
   placeholder?: string;
   /** Footer text displayed below the input */
   footerText?: string;
+  /** Optional left action buttons (e.g., file upload) */
+  leftActions?: ReactNode;
 }
 

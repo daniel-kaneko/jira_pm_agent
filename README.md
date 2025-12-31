@@ -12,6 +12,8 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 - 🔍 Smart search across sprints, assignees, and statuses
 - 📊 Sprint comparison and productivity analysis
 - 📋 Interactive issue tables with filtering, sorting, and CSV export
+- ✏️ Create and update issues with confirmation workflow
+- 📈 Track status changes and activity over time
 - 🎨 Multiple themes with visual effects
 - ⚡ Streaming responses with reasoning display
 - 🔄 Smart context management for follow-up questions
@@ -90,13 +92,26 @@ pnpm dev
 
 ## AI Tools
 
-The agent has access to these read-only Jira tools:
+The agent has access to these Jira tools:
+
+### Read Tools
 
 | Tool                | Description                                        |
 | ------------------- | -------------------------------------------------- |
 | `prepare_search`    | Resolve team member names to emails for filtering  |
 | `get_sprint_issues` | Get issues from sprints with multi-filter support  |
 | `get_issue`         | Get details of a specific issue including comments |
+| `get_activity`      | Get status changes over time for tracking progress |
+
+### Write Tools
+
+| Tool            | Description                                             |
+| --------------- | ------------------------------------------------------- |
+| `manage_issue`  | Create or update a single issue                         |
+| `create_issues` | Bulk create issues (uses native Jira API, 50 per batch) |
+| `update_issues` | Bulk update issues (parallel with retry logic)          |
+
+Write operations require user confirmation before execution.
 
 ### Cached Data
 

@@ -13,9 +13,12 @@
     "docker:ollama:pull": "docker compose exec ollama ollama pull qwen2.5:7b"
   },
   "dependencies": {
+    "@azure/arm-compute": "^23.2.0",
+    "@azure/identity": "^4.13.0",
     "bcrypt": "^6.0.0",
     "next": "16.0.8",
     "ollama": "^0.5.11",
+    "papaparse": "^5.5.3",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "react-markdown": "^10.1.0",
@@ -25,6 +28,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv-cli": "^11.0.0",

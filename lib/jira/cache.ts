@@ -119,7 +119,7 @@ export async function refreshCache(): Promise<CacheData> {
   const boardId = JIRA_CONFIG.boardId;
 
   const [allSprints, fields] = await Promise.all([
-    jiraClient.listSprints(boardId, "all", 20),
+    jiraClient.listSprints(boardId, "all", 50),
     jiraClient.getFields(),
   ]);
 

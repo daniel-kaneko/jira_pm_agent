@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { chatWithTools, streamChat } from "@/lib/ollama";
 import { jiraTools } from "@/lib/jira";
 import { generateSystemPrompt, MAX_TOOL_ITERATIONS } from "@/lib/jira/prompts";
-import { getCachedData } from "@/lib/jira/cache";
 import type {
   AskRequest,
   StreamEvent,
@@ -24,14 +23,22 @@ async function callTool(
 ): Promise<unknown> {
   const baseUrl =
     process.env.NEXT_PUBLIC_BASE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
     `http://localhost:${process.env.PORT || 3000}`;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Cookie: cookieHeader,
+  };
+
+  if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {
+    headers["x-vercel-protection-bypass"] =
+      process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  }
 
   const response = await fetch(`${baseUrl}/api/jira/tools`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Cookie: cookieHeader,
-    },
+    headers,
     body: JSON.stringify({ tool: toolName, arguments: toolArgs }),
   });
 
@@ -289,12 +296,8 @@ async function* orchestrate(
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
   cookieHeader: string
 ): AsyncGenerator<StreamEvent> {
-  const cachedData = await getCachedData();
-  const systemPrompt = generateSystemPrompt(
-    cachedData.sprints,
-    cachedData.statuses,
-    cachedData.teamMembers
-  );
+  // Minimal prompt - AI uses tools to get context it needs
+  const systemPrompt = generateSystemPrompt();
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },

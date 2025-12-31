@@ -16,6 +16,7 @@ export function ChatInput({
   onSubmit,
   isLoading,
   placeholder = "ask something...",
+  leftActions,
 }: ChatInputProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -36,6 +37,7 @@ export function ChatInput({
     <footer className="shrink-0 bg-[var(--bg-soft)] border-t border-[var(--bg-highlight)]">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-start gap-2 px-4 py-3">
+          {leftActions}
           <span className="text-[var(--yellow)] py-2 shrink-0">
             {isLoading ? "~" : ":"}
           </span>

@@ -103,6 +103,15 @@ export interface JiraSprintSummary {
   issues: JiraSprintIssues["issues"];
 }
 
+export interface ToolPropertyDefinition {
+  type: string;
+  description: string;
+  items?: {
+    type: string;
+    properties?: Record<string, { type: string; description: string }>;
+  };
+}
+
 export interface ToolDefinition {
   type: "function";
   function: {
@@ -110,14 +119,7 @@ export interface ToolDefinition {
     description: string;
     parameters: {
       type: "object";
-      properties: Record<
-        string,
-        {
-          type: string;
-          items?: { type: string };
-          description: string;
-        }
-      >;
+      properties: Record<string, ToolPropertyDefinition>;
       required: string[];
     };
   };
@@ -156,11 +158,84 @@ export interface ManageIssueArgs {
   status?: string;
 }
 
+export interface GetActivityArgs {
+  sprint_ids: number[];
+  since: string;
+  to_status?: string;
+  assignees?: string[];
+}
+
+export interface ActivityChange {
+  issue_key: string;
+  summary: string;
+  field: string;
+  from: string | null;
+  to: string | null;
+  changed_by: string;
+  changed_at: string;
+}
+
+export interface IssueToCreate {
+  summary: string;
+  description?: string;
+  issue_type?: string;
+  assignee?: string;
+  sprint_id?: number;
+  story_points?: number;
+  status?: string;
+}
+
+export interface IssueToUpdate {
+  issue_key: string;
+  summary?: string;
+  description?: string;
+  assignee?: string;
+  sprint_id?: number;
+  story_points?: number;
+  status?: string;
+}
+
+export interface CreateIssuesArgs {
+  issues: IssueToCreate[];
+}
+
+export interface UpdateIssuesArgs {
+  issues: IssueToUpdate[];
+}
+
+export interface BulkOperationResult {
+  action: "created" | "updated" | "error";
+  key?: string;
+  summary?: string;
+  error?: string;
+  changes?: string[];
+}
+
+export interface ListSprintsArgs {
+  state?: "active" | "closed" | "future" | "all";
+  limit?: number;
+}
+
+export interface GetContextArgs {
+  // No arguments needed
+}
+
+export interface QueryCSVArgs {
+  filters?: Record<string, string>;
+  limit?: number;
+}
+
 export type ToolArgsMap = {
+  list_sprints: ListSprintsArgs;
+  get_context: GetContextArgs;
+  query_csv: QueryCSVArgs;
   prepare_search: PrepareSearchArgs;
   get_sprint_issues: GetSprintIssuesArgs;
   get_issue: GetIssueArgs;
+  get_activity: GetActivityArgs;
   manage_issue: ManageIssueArgs;
+  create_issues: CreateIssuesArgs;
+  update_issues: UpdateIssuesArgs;
 };
 
 export interface ToolCall<T extends ToolName = ToolName> {
@@ -169,6 +244,19 @@ export interface ToolCall<T extends ToolName = ToolName> {
 }
 
 export type ToolResultMap = {
+  list_sprints: {
+    sprints: Array<{ id: number; name: string; state: string }>;
+    hint: string;
+  };
+  get_context: {
+    team_members: string[];
+    statuses: string[];
+  };
+  query_csv: {
+    rows: Array<Record<string, string>>;
+    totalMatched: number;
+    hasMore: boolean;
+  };
   prepare_search: {
     all_team: boolean;
     team_members?: string[];
@@ -216,6 +304,19 @@ export type ToolResultMap = {
     issue_type: string;
     comments: Array<{ author: string; body: string; created: string }>;
   };
+  get_activity: {
+    period: {
+      since: string;
+      until: string;
+    };
+    filters_applied: {
+      sprint_ids: number[];
+      to_status: string | null;
+      assignees: string[] | null;
+    };
+    total_changes: number;
+    changes: ActivityChange[];
+  };
   manage_issue: {
     action: "created" | "updated";
     key: string;
@@ -226,5 +327,17 @@ export type ToolResultMap = {
     sprint: string | null;
     story_points: number | null;
     status: string;
+  };
+  create_issues: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    results: BulkOperationResult[];
+  };
+  update_issues: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    results: BulkOperationResult[];
   };
 };

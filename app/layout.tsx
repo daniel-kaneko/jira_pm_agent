@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { CSVProvider } from "@/contexts/CSVContext";
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
@@ -21,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${jetbrainsMono.className} antialiased`}>
-        <ErrorBoundary>{children}</ErrorBoundary>
+        <ErrorBoundary>
+          <CSVProvider>{children}</CSVProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

@@ -382,7 +382,7 @@ export function IssueListCard({ data }: IssueListCardProps) {
                       href={issue.key_link.match(/\((.*?)\)/)?.[1] || "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-[var(--blue)] hover:text-[var(--cyan)] text-sm"
+                      className="font-mono text-[var(--blue)] hover:text-[var(--cyan)] text-sm min-w-[80px]"
                     >
                       {issue.key}
                     </a>

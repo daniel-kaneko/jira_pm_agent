@@ -37,8 +37,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const result = await executeJiraTool(
       {
-        name: tool,
-        arguments: args || {},
+      name: tool,
+      arguments: args || {},
       },
       effectiveConfigId
     );

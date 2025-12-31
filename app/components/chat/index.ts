@@ -13,6 +13,7 @@ export { ReasoningDisplay } from "./ReasoningDisplay";
 export { CSVUpload } from "./CSVUpload";
 export { ConfirmationCard } from "./ConfirmationCard";
 export { ProjectSelector } from "./ProjectSelector";
+export { VMStatusIndicator } from "./VMStatusIndicator";
 export type { PendingAction } from "./ConfirmationCard";
 
 export type { Message, Source, ReasoningStep, StructuredData, QueryContext } from "./types";

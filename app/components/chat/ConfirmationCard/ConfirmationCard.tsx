@@ -18,38 +18,49 @@ export function ConfirmationCard({
 }: ConfirmationCardProps) {
   const isCreate = action.toolName === "create_issues";
 
+  const issueCount = action.issues.length;
+  const isLargeBatch = issueCount > 10;
+
   return (
     <div className="confirmation-card">
-      <table className="issues-table">
-        <thead>
-          <tr>
-            <th className="col-summary">Summary</th>
-            <th className="col-assignee">Assignee</th>
-            <th className="col-points">Pts</th>
-            {!isCreate && <th className="col-status">Status</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {action.issues.map((issue, index) => (
-            <tr key={index}>
-              <td className="col-summary">
-                {issue.issue_key && (
-                  <span className="issue-key">{issue.issue_key}</span>
-                )}
-                <div className="summary-text">{issue.summary || "—"}</div>
-                {issue.description && (
-                  <div className="description-text">{issue.description}</div>
-                )}
-              </td>
-              <td className="col-assignee">{issue.assignee || "—"}</td>
-              <td className="col-points">{issue.story_points ?? "—"}</td>
-              {!isCreate && (
-                <td className="col-status">{issue.status || "—"}</td>
-              )}
+      {isLargeBatch && (
+        <div className="batch-header">
+          <span className="batch-count">{issueCount} issues</span>
+          <span className="batch-hint">Scroll to review</span>
+        </div>
+      )}
+      <div className={`table-container ${isLargeBatch ? "scrollable" : ""}`}>
+        <table className="issues-table">
+          <thead>
+            <tr>
+              <th className="col-summary">Summary</th>
+              <th className="col-assignee">Assignee</th>
+              <th className="col-points">Pts</th>
+              {!isCreate && <th className="col-status">Status</th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {action.issues.map((issue, index) => (
+              <tr key={index}>
+                <td className="col-summary">
+                  {issue.issue_key && (
+                    <span className="issue-key">{issue.issue_key}</span>
+                  )}
+                  <div className="summary-text">{issue.summary || "—"}</div>
+                  {issue.description && (
+                    <div className="description-text">{issue.description}</div>
+                  )}
+                </td>
+                <td className="col-assignee">{issue.assignee || "—"}</td>
+                <td className="col-points">{issue.story_points ?? "—"}</td>
+                {!isCreate && (
+                  <td className="col-status">{issue.status || "—"}</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <div className="card-footer">
         <span className="footer-hint">
@@ -74,6 +85,35 @@ export function ConfirmationCard({
           margin: 12px 0;
           overflow: hidden;
           animation: slideIn 0.2s ease-out;
+        }
+
+        .batch-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 12px;
+          background: var(--bg-highlight, #252525);
+          border-bottom: 1px solid var(--bg-highlight, #333);
+        }
+
+        .batch-count {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--accent, #3b82f6);
+        }
+
+        .batch-hint {
+          font-size: 11px;
+          color: var(--fg-muted, #666);
+        }
+
+        .table-container {
+          overflow: visible;
+        }
+
+        .table-container.scrollable {
+          max-height: 300px;
+          overflow-y: auto;
         }
 
         .issues-table {

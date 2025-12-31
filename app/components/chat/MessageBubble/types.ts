@@ -13,5 +13,6 @@ export interface MessageBubbleProps {
   message: Message;
   /** Whether to show the thinking indicator */
   isThinking?: boolean;
+  /** Whether the message is currently being streamed */
+  isStreaming?: boolean;
 }
-

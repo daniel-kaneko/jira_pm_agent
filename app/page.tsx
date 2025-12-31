@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Header,
   MessageBubble,
@@ -46,6 +46,8 @@ export default function Home() {
   const [effectsEnabled, setEffectsEnabled] = useState(false);
   const [csvUploading, setCsvUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement>(null);
+  const userScrolledUp = useRef(false);
 
   useEffect(() => {
     if (selectedConfig) {
@@ -80,7 +82,17 @@ export default function Home() {
     localStorage.setItem("effectsEnabled", String(enabled));
   };
 
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    userScrolledUp.current = distanceFromBottom > 100;
+  }, []);
+
   useEffect(() => {
+    if (userScrolledUp.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading, reasoning]);
 
@@ -92,11 +104,13 @@ export default function Home() {
     if (!input.trim() || isLoading) return;
     const content = input.trim();
     setInput("");
+    userScrolledUp.current = false;
     await sendMessage(content);
   };
 
   const handleCSVUpload = async (summary: string, rows: CSVRow[]) => {
     setCsvUploading(true);
+    userScrolledUp.current = false;
     try {
       setCSVData(rows);
       const apiMessage = `[CSV Uploaded - STOP! Do NOT call any tools. Just list the columns and ask what I want to do.]\n${summary}`;
@@ -121,7 +135,11 @@ export default function Home() {
         />
       </Header>
 
-      <main className="flex-1 overflow-y-auto min-h-0 relative">
+      <main
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto min-h-0 relative"
+      >
         <div className="sticky top-0 left-0 w-full h-0 z-0 pointer-events-none">
           <div className="absolute top-0 left-0 w-full h-[calc(100vh-8rem)]">
             {theme === "matrix" && <MatrixRain enabled={effectsEnabled} />}
@@ -147,13 +165,17 @@ export default function Home() {
             <div>
               {messages.map((message, index) => {
                 const isLastMessage = index === messages.length - 1;
+                const isAssistant = message.role === "assistant";
                 const showThinking =
                   isLoading && isLastMessage && reasoning.length === 0;
+                const isCurrentlyStreaming =
+                  isLoading && isLastMessage && isAssistant;
                 return (
                   <MessageBubble
                     key={message.id}
                     message={message}
                     isThinking={showThinking}
+                    isStreaming={isCurrentlyStreaming}
                   />
                 );
               })}

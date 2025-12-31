@@ -59,39 +59,34 @@ Returns: { team_members: ["John Doe", "Jane Smith", ...], statuses: ["To Do", "I
     type: "function",
     function: {
       name: "query_csv",
-      description: `Query the uploaded CSV file with flexible filtering options.
+      description: `Query the uploaded CSV file. Use this to EXPLORE data, not for bulk creation.
 
 Examples:
-- query_csv({ rowIndices: [103] }) - get row 103 (user says "row 103")
-- query_csv({ rowIndices: [103, 105, 110] }) - get rows 103, 105, and 110
-- query_csv({ filters: { "Status": "Done" } }) - simple filter
-- query_csv({ filters: { "Description": "store", "Status": "Done" } }) - AND: description contains "store" AND status is "Done"
-- query_csv({ filters: { "Priority": ["High", "Critical"] } }) - OR: priority is "High" OR "Critical"
-- query_csv({ filters: { "Domain": "Catalog", "Phase": ["Q1", "Q2"] } }) - Combined: domain="Catalog" AND (phase="Q1" OR phase="Q2")
+- query_csv({ row_range: "100-200" }) - get rows 100 through 200
+- query_csv({ rowIndices: [103, 105] }) - get specific rows only
+- query_csv({ filters: { "Status": "Done" } }) - filter by column value
 
-Filter logic:
-- Multiple keys = AND (all must match)
-- Array values = OR (any must match)
-- String values = case-insensitive partial match (contains)
+NOTE: For bulk issue creation, skip query_csv and use prepare_issues directly with row_range.
 
-Returns: { rows: [...], summary: { totalRows, filteredRows, availableFilters } }`,
+Returns: { rows: [...], summary: { totalRows, filteredRows } }`,
       parameters: {
         type: "object",
         properties: {
+          row_range: {
+            type: "string",
+            description:
+              "Range string like '100-200' for rows 100 through 200.",
+          },
           rowIndices: {
             type: "array",
             items: { type: "number" },
             description:
-              "Array of row indices (1-based). Use [103] for 'row 103' or [10, 20, 30] for multiple rows.",
+              "Specific row indices (1-based). Use row_range for ranges.",
           },
           filters: {
             type: "object",
             description:
-              "Column filters. Values can be string (contains) or array of strings (any match). Multiple columns = AND.",
-          },
-          offset: {
-            type: "number",
-            description: "Number of rows to skip (default: 0)",
+              "Column filters. Values can be string (contains) or array of strings (any match).",
           },
           limit: {
             type: "number",
@@ -239,18 +234,27 @@ Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, c
       name: "prepare_issues",
       description: `Prepare issues from CSV for Jira creation.
 
-CORRECT call format:
-prepare_issues(row_indices: [45, 66], mapping: {summary_column: "STORY", description_column: "STORY_DESCRIPTION", assignee: "Daniel", story_points: 8})
+Examples:
+- prepare_issues(row_range: "1-100", mapping: {...}) - first 100 rows
+- prepare_issues(row_range: "45-66", mapping: {...}) - rows 45 through 66
+- prepare_issues(row_indices: [45, 66, 80], mapping: {...}) - specific rows only
 
-IMPORTANT: Use "row_indices" (not "rows"), and put column names inside "mapping" object.`,
+For BULK operations (10+ rows), ALWAYS use row_range instead of row_indices.
+
+mapping object: { summary_column, description_column, assignee, story_points, sprint_id, issue_type }`,
       parameters: {
         type: "object",
         properties: {
+          row_range: {
+            type: "string",
+            description:
+              "Range string like '1-100' for rows 1 through 100. Use this for bulk operations.",
+          },
           row_indices: {
             type: "array",
             items: { type: "number" },
             description:
-              "Row numbers to use (1-based). MUST be named row_indices, not rows.",
+              "Specific row numbers (1-based). Use row_range instead for large batches.",
           },
           mapping: {
             type: "object",
@@ -258,7 +262,7 @@ IMPORTANT: Use "row_indices" (not "rows"), and put column names inside "mapping"
               "Object containing: summary_column, description_column, assignee, story_points, sprint_id, issue_type",
           },
         },
-        required: ["row_indices", "mapping"],
+        required: ["mapping"],
       },
     },
   },

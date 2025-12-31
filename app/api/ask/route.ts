@@ -87,6 +87,24 @@ function condenseForAI(
   result: unknown,
   toolArgs: Record<string, unknown> = {}
 ): unknown {
+  if (toolName === "prepare_issues") {
+    const data = result as PrepareIssuesResult;
+    if (!data.ready_for_creation) return result;
+    const issuesForCreate = data.preview.map((p) => ({
+      summary: p.summary,
+      description: p.description || undefined,
+      assignee: p.assignee || undefined,
+      story_points: p.story_points ?? undefined,
+      sprint_id: p.sprint_id ?? undefined,
+      issue_type: p.issue_type,
+    }));
+    return `Ready to create ${
+      data.preview.length
+    } issues. Call create_issues with: ${JSON.stringify({
+      issues: issuesForCreate,
+    })}`;
+  }
+
   if (toolName !== "get_sprint_issues") return result;
 
   const data = result as SprintIssuesResult;
@@ -361,11 +379,36 @@ function handleQueryCSV(
   }
 
   const columns = Object.keys(csvData[0]);
+  const rowRange = args.row_range as string | undefined;
   const rawRowIndices = args.rowIndices ?? args.rowIndex;
   const filters = args.filters as Record<string, string | string[]> | undefined;
-  const offset = (args.offset as number) || 0;
   const limit = (args.limit as number) || 50;
   const filtersApplied: string[] = [];
+
+  if (rowRange) {
+    const parsed = parseRowRange(rowRange, csvData.length);
+    if (!parsed) {
+      return {
+        rows: [],
+        summary: {
+          totalRows: csvData.length,
+          filteredRows: 0,
+          columns,
+          filtersApplied: [`Invalid range: ${rowRange}`],
+        },
+      };
+    }
+    const rows = parsed.map((idx) => csvData[idx - 1]);
+    return {
+      rows,
+      summary: {
+        totalRows: csvData.length,
+        filteredRows: rows.length,
+        columns,
+        filtersApplied: [`rows ${rowRange}`],
+      },
+    };
+  }
 
   if (rawRowIndices !== undefined) {
     const indices: number[] = Array.isArray(rawRowIndices)
@@ -414,7 +457,7 @@ function handleQueryCSV(
   }
 
   return {
-    rows: filtered.slice(offset, offset + limit),
+    rows: filtered.slice(0, limit),
     summary: {
       totalRows: csvData.length,
       filteredRows: filtered.length,
@@ -450,6 +493,26 @@ function findColumnCaseInsensitive(
   return columns.find((col) => col.toLowerCase() === searchLower) ?? null;
 }
 
+/**
+ * Parse a row range string like "1-100" into an array of indices.
+ */
+function parseRowRange(rangeStr: string, maxRows: number): number[] | null {
+  const match = rangeStr.match(/^(\d+)-(\d+)$/);
+  if (!match) return null;
+
+  const start = parseInt(match[1], 10);
+  const end = parseInt(match[2], 10);
+
+  if (start < 1 || end < start || start > maxRows) return null;
+
+  const clampedEnd = Math.min(end, maxRows);
+  const indices: number[] = [];
+  for (let i = start; i <= clampedEnd; i++) {
+    indices.push(i);
+  }
+  return indices;
+}
+
 function handlePrepareIssues(
   csvData: CSVRow[] | undefined,
   args: Record<string, unknown>
@@ -464,14 +527,31 @@ function handlePrepareIssues(
     };
   }
 
-  const rowIndices = args.row_indices as number[] | undefined;
+  const rowRange = args.row_range as string | undefined;
+  const rawRowIndices = args.row_indices as number[] | undefined;
   const mapping = args.mapping as Record<string, unknown> | undefined;
+
+  let rowIndices: number[] | undefined;
+
+  if (rowRange) {
+    const parsed = parseRowRange(rowRange, csvData.length);
+    if (!parsed) {
+      return {
+        preview: [],
+        ready_for_creation: false,
+        errors: [`Invalid row_range "${rowRange}". Use format "1-100".`],
+      };
+    }
+    rowIndices = parsed;
+  } else {
+    rowIndices = rawRowIndices;
+  }
 
   if (!rowIndices || rowIndices.length === 0) {
     return {
       preview: [],
       ready_for_creation: false,
-      errors: ["row_indices is required"],
+      errors: ["row_range or row_indices is required"],
     };
   }
 
@@ -842,22 +922,16 @@ function summarizeToolResult(toolName: string, result: unknown): string {
         return `Error: ${data.errors.join(", ")}`;
       }
       const warnings = data.errors.filter((e) => e.startsWith("Warning"));
-      const issuesForCreate = data.preview.map((p) => ({
-        summary: p.summary,
-        description: p.description || undefined,
-        assignee: p.assignee || undefined,
-        story_points: p.story_points ?? undefined,
-        sprint_id: p.sprint_id ?? undefined,
-        issue_type: p.issue_type,
-      }));
-      let msg = `Ready to create ${data.preview.length} issue${
-        data.preview.length !== 1 ? "s" : ""
-      }. `;
-      msg += `Call create_issues with: ${JSON.stringify({
-        issues: issuesForCreate,
-      })}`;
+      const count = data.preview.length;
+      const firstIssue = data.preview[0];
+      let msg = `Prepared ${count} issue${count !== 1 ? "s" : ""}`;
+      if (firstIssue) {
+        msg += ` (e.g. "${firstIssue.summary.slice(0, 40)}${
+          firstIssue.summary.length > 40 ? "..." : ""
+        }")`;
+      }
       if (warnings.length > 0) {
-        msg += ` (${warnings.join("; ")})`;
+        msg += ` - ${warnings.join("; ")}`;
       }
       return msg;
     }

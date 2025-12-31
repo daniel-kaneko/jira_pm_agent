@@ -9,6 +9,7 @@ import {
   AssigneeBreakdownData,
 } from "../AssigneeBreakdownCard";
 import { TypingIndicator } from "../TypingIndicator";
+import { useStreamedText } from "@/hooks/useStreamedText";
 
 const markdownComponents: Components = {
   a: ({ href, children }) => (
@@ -38,9 +39,11 @@ const markdownComponents: Components = {
 export function MessageBubble({
   message,
   isThinking = false,
+  isStreaming = false,
 }: MessageBubbleProps) {
   const [showReasoning, setShowReasoning] = useState(false);
   const isUser = message.role === "user";
+  const displayContent = useStreamedText(message.content, 4, isStreaming);
   const validSources =
     message.sources?.filter(
       (source) => source.name?.trim() && source.url?.trim()
@@ -50,6 +53,8 @@ export function MessageBubble({
     !isUser && message.reasoning && message.reasoning.length > 0;
   const hasStructuredData =
     !isUser && message.structuredData && message.structuredData.length > 0;
+
+  const contentToRender = isStreaming ? displayContent : message.content;
 
   const renderContent = () => {
     if (isUser)
@@ -72,13 +77,13 @@ export function MessageBubble({
 
       return (
         <div className="space-y-3">
-          {message.content && (
+          {contentToRender && (
             <div className="prose-chat text-[var(--fg)]">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={markdownComponents}
               >
-                {message.content}
+                {contentToRender}
               </ReactMarkdown>
             </div>
           )}
@@ -100,7 +105,7 @@ export function MessageBubble({
           remarkPlugins={[remarkGfm]}
           components={markdownComponents}
         >
-          {message.content}
+          {contentToRender}
         </ReactMarkdown>
       </div>
     );

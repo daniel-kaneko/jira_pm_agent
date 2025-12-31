@@ -1,4 +1,5 @@
 import { HeaderProps } from "./types";
+import { VMStatusIndicator } from "../VMStatusIndicator";
 
 /**
  * Neovim-style statusline header component.
@@ -14,7 +15,7 @@ export function Header({ title = "task-o-matic", children }: HeaderProps) {
     <header className="shrink-0 bg-[var(--bg-soft)] border-b border-[var(--bg-highlight)] px-4 py-2">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-[var(--green)]">●</span>
+          <VMStatusIndicator />
           <span className="text-[var(--fg)]">{title}</span>
           <span className="text-[var(--fg-muted)]">[+]</span>
         </div>

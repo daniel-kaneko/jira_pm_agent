@@ -97,6 +97,11 @@ function condenseForAI(
       story_points: p.story_points ?? undefined,
       sprint_id: p.sprint_id ?? undefined,
       issue_type: p.issue_type,
+      priority: p.priority || undefined,
+      labels: p.labels?.length ? p.labels : undefined,
+      fix_versions: p.fix_versions?.length ? p.fix_versions : undefined,
+      components: p.components?.length ? p.components : undefined,
+      due_date: p.due_date || undefined,
     }));
     return `Ready to create ${
       data.preview.length
@@ -476,6 +481,11 @@ interface PrepareIssuesResult {
     story_points: number | null;
     sprint_id: number | null;
     issue_type: string;
+    priority: string | null;
+    labels: string[] | null;
+    fix_versions: string[] | null;
+    components: string[] | null;
+    due_date: string | null;
   }>;
   ready_for_creation: boolean;
   errors: string[];
@@ -572,6 +582,14 @@ function handlePrepareIssues(
   const storyPoints = mapping.story_points as number | undefined;
   const sprintId = mapping.sprint_id as number | undefined;
   const issueType = (mapping.issue_type as string) || "Story";
+  const priority = mapping.priority as string | undefined;
+  const labels = mapping.labels as string[] | undefined;
+  const fixVersionsInput = mapping.fix_versions as
+    | string
+    | string[]
+    | undefined;
+  const components = mapping.components as string[] | undefined;
+  const dueDate = mapping.due_date as string | undefined;
 
   if (!summaryColumnInput) {
     return {
@@ -609,6 +627,17 @@ function handlePrepareIssues(
     }
   }
 
+  let fixVersionsColumn: string | null = null;
+  if (
+    typeof fixVersionsInput === "string" &&
+    !Array.isArray(fixVersionsInput)
+  ) {
+    const foundColumn = findColumnCaseInsensitive(columns, fixVersionsInput);
+    if (foundColumn) {
+      fixVersionsColumn = foundColumn;
+    }
+  }
+
   const preview = rowIndices
     .map((idx) => {
       if (idx < 1 || idx > csvData.length) {
@@ -617,6 +646,14 @@ function handlePrepareIssues(
       }
 
       const row = csvData[idx - 1];
+
+      let rowFixVersions: string[] | null = null;
+      if (fixVersionsColumn && row[fixVersionsColumn]) {
+        rowFixVersions = [row[fixVersionsColumn]];
+      } else if (Array.isArray(fixVersionsInput)) {
+        rowFixVersions = fixVersionsInput;
+      }
+
       return {
         summary: row[summaryColumn] || `Row ${idx}`,
         description: descriptionColumn ? row[descriptionColumn] || "" : "",
@@ -624,6 +661,11 @@ function handlePrepareIssues(
         story_points: storyPoints ?? null,
         sprint_id: sprintId ?? null,
         issue_type: issueType,
+        priority: priority || null,
+        labels: labels || null,
+        fix_versions: rowFixVersions,
+        components: components || null,
+        due_date: dueDate || null,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -720,6 +762,12 @@ async function* orchestrate(
             issue_key: issue.issue_key as string | undefined,
             sprint_id: issue.sprint_id as number | undefined,
             story_points: issue.story_points as number | undefined,
+            issue_type: issue.issue_type as string | undefined,
+            priority: issue.priority as string | undefined,
+            labels: issue.labels as string[] | undefined,
+            fix_versions: issue.fix_versions as string[] | undefined,
+            components: issue.components as string[] | undefined,
+            due_date: issue.due_date as string | undefined,
           })),
         },
       };

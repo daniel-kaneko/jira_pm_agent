@@ -1,6 +1,14 @@
 import { createJiraClient } from "./client";
 import { getConfig, getBoardId } from "./config";
-import type { JiraSprint, TeamMember, JiraField, JiraProjectConfig } from "./types";
+import type {
+  JiraSprint,
+  TeamMember,
+  JiraField,
+  JiraProjectConfig,
+  JiraVersion,
+  JiraComponent,
+  JiraPriority,
+} from "./types";
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -21,6 +29,9 @@ interface CacheData {
   teamMembers: TeamMember[];
   fields: JiraField[];
   fieldMappings: FieldMappings;
+  versions: JiraVersion[];
+  components: JiraComponent[];
+  priorities: JiraPriority[];
   lastFetched: number;
 }
 
@@ -119,9 +130,12 @@ export async function refreshCache(configId: string): Promise<CacheData> {
   const client = createJiraClient(config);
   const boardId = getBoardId(config);
 
-  const [allSprints, fields] = await Promise.all([
+  const [allSprints, fields, versions, components, priorities] = await Promise.all([
     client.listSprints(boardId, "all", 50),
     client.getFields(),
+    client.getVersions(config.projectKey),
+    client.getComponents(config.projectKey),
+    client.getPriorities(),
   ]);
 
   const fieldMappings = findFields(fields);
@@ -138,6 +152,9 @@ export async function refreshCache(configId: string): Promise<CacheData> {
     teamMembers,
     fields,
     fieldMappings,
+    versions: versions.filter((v) => !v.archived),
+    components,
+    priorities,
     lastFetched: Date.now(),
   };
 
@@ -155,6 +172,18 @@ export async function getCachedStatuses(configId: string): Promise<string[]> {
 
 export async function getCachedTeamMembers(configId: string): Promise<TeamMember[]> {
   return (await ensureCache(configId)).teamMembers;
+}
+
+export async function getCachedVersions(configId: string): Promise<JiraVersion[]> {
+  return (await ensureCache(configId)).versions;
+}
+
+export async function getCachedComponents(configId: string): Promise<JiraComponent[]> {
+  return (await ensureCache(configId)).components;
+}
+
+export async function getCachedPriorities(configId: string): Promise<JiraPriority[]> {
+  return (await ensureCache(configId)).priorities;
 }
 
 export async function getCachedData(configId: string): Promise<CacheData> {

@@ -7,6 +7,9 @@ import type {
   UpdateIssueParams,
   JiraField,
   JiraProjectConfig,
+  JiraVersion,
+  JiraComponent,
+  JiraPriority,
 } from "./types";
 
 const JIRA_EMAIL = process.env.JIRA_EMAIL || "";
@@ -297,6 +300,12 @@ export function createJiraClient(config: JiraProjectConfig) {
       assigneeEmail,
       storyPoints,
       storyPointsFieldId,
+      priority,
+      labels,
+      fixVersions,
+      components,
+      dueDate,
+      customFields,
     } = params;
 
     const fields: Record<string, unknown> = {
@@ -326,20 +335,44 @@ export function createJiraClient(config: JiraProjectConfig) {
       fields[storyPointsFieldId] = storyPoints;
     }
 
-      const data = await jiraFetch<Record<string, unknown>>(
-        "/rest/api/3/issue",
-        baseUrl,
-        {
-      method: "POST",
-      body: JSON.stringify({ fields }),
-        }
-      );
+    if (priority) {
+      fields.priority = { name: priority };
+    }
+
+    if (labels && labels.length > 0) {
+      fields.labels = labels;
+    }
+
+    if (fixVersions && fixVersions.length > 0) {
+      fields.fixVersions = fixVersions.map((name) => ({ name }));
+    }
+
+    if (components && components.length > 0) {
+      fields.components = components.map((name) => ({ name }));
+    }
+
+    if (dueDate) {
+      fields.duedate = dueDate;
+    }
+
+    if (customFields) {
+      Object.assign(fields, customFields);
+    }
+
+    const data = await jiraFetch<Record<string, unknown>>(
+      "/rest/api/3/issue",
+      baseUrl,
+      {
+        method: "POST",
+        body: JSON.stringify({ fields }),
+      }
+    );
 
     return {
       key: data.key as string,
       id: data.id as string,
       self: data.self as string,
-        url: `${baseUrl}/browse/${data.key}`,
+      url: `${baseUrl}/browse/${data.key}`,
     };
   },
 
@@ -351,6 +384,12 @@ export function createJiraClient(config: JiraProjectConfig) {
       assigneeEmail,
       storyPoints,
       storyPointsFieldId,
+      priority,
+      labels,
+      fixVersions,
+      components,
+      dueDate,
+      customFields,
     } = params;
 
     const fields: Record<string, unknown> = {};
@@ -380,11 +419,35 @@ export function createJiraClient(config: JiraProjectConfig) {
       fields[storyPointsFieldId] = storyPoints;
     }
 
+    if (priority !== undefined) {
+      fields.priority = { name: priority };
+    }
+
+    if (labels !== undefined) {
+      fields.labels = labels;
+    }
+
+    if (fixVersions !== undefined) {
+      fields.fixVersions = fixVersions.map((name) => ({ name }));
+    }
+
+    if (components !== undefined) {
+      fields.components = components.map((name) => ({ name }));
+    }
+
+    if (dueDate !== undefined) {
+      fields.duedate = dueDate;
+    }
+
+    if (customFields) {
+      Object.assign(fields, customFields);
+    }
+
     if (Object.keys(fields).length === 0) {
       return;
     }
 
-      await jiraFetch(`/rest/api/3/issue/${issueKey}`, baseUrl, {
+    await jiraFetch(`/rest/api/3/issue/${issueKey}`, baseUrl, {
       method: "PUT",
       body: JSON.stringify({ fields }),
     });
@@ -453,6 +516,44 @@ export function createJiraClient(config: JiraProjectConfig) {
     }));
   },
 
+  async getVersions(projectKey: string): Promise<JiraVersion[]> {
+    const data = await jiraFetch<Array<Record<string, unknown>>>(
+      `/rest/api/3/project/${projectKey}/versions`,
+      baseUrl
+    );
+
+    return data.map((version) => ({
+      id: version.id as string,
+      name: version.name as string,
+      released: version.released as boolean,
+      archived: version.archived as boolean,
+    }));
+  },
+
+  async getComponents(projectKey: string): Promise<JiraComponent[]> {
+    const data = await jiraFetch<Array<Record<string, unknown>>>(
+      `/rest/api/3/project/${projectKey}/components`,
+      baseUrl
+    );
+
+    return data.map((component) => ({
+      id: component.id as string,
+      name: component.name as string,
+    }));
+  },
+
+  async getPriorities(): Promise<JiraPriority[]> {
+    const data = await jiraFetch<Array<Record<string, unknown>>>(
+      "/rest/api/3/priority",
+      baseUrl
+    );
+
+    return data.map((priority) => ({
+      id: priority.id as string,
+      name: priority.name as string,
+    }));
+  },
+
   async getSprintChangelogs(
     sprintIds: number[],
     sinceDate: Date
@@ -473,7 +574,8 @@ export function createJiraClient(config: JiraProjectConfig) {
     }>
   > {
     const sprintClause = sprintIds.map((id) => `sprint = ${id}`).join(" OR ");
-    const jql = `(${sprintClause}) ORDER BY updated DESC`;
+    const sinceDateStr = sinceDate.toISOString().split("T")[0];
+    const jql = `(${sprintClause}) AND updated >= "${sinceDateStr}" ORDER BY updated DESC`;
 
     const allIssues: Array<{
       key: string;
@@ -494,53 +596,66 @@ export function createJiraClient(config: JiraProjectConfig) {
     const maxResults = 50;
 
     while (true) {
-      const data = await jiraFetch<Record<string, unknown>>(
+      const searchData = await jiraFetch<Record<string, unknown>>(
         `/rest/api/3/search?jql=${encodeURIComponent(
           jql
-          )}&expand=changelog&fields=summary,assignee&maxResults=${maxResults}&startAt=${startAt}`,
-          baseUrl
+        )}&fields=summary,assignee&maxResults=${maxResults}&startAt=${startAt}`,
+        baseUrl
       );
 
-      const issues = (data.issues as Array<Record<string, unknown>>) || [];
+      const issues = (searchData.issues as Array<Record<string, unknown>>) || [];
 
       for (const issue of issues) {
+        const issueKey = issue.key as string;
         const fields = issue.fields as Record<string, unknown>;
-        const changelogData = issue.changelog as Record<string, unknown>;
-        const histories =
-          (changelogData?.histories as Array<Record<string, unknown>>) || [];
 
-        const filteredHistories = histories
-            .filter((history) => new Date(history.created as string) >= sinceDate)
+        try {
+          const changelogData = await jiraFetch<Record<string, unknown>>(
+            `/rest/api/3/issue/${issueKey}/changelog?maxResults=100`,
+            baseUrl
+          );
+
+          const histories =
+            (changelogData?.values as Array<Record<string, unknown>>) || [];
+
+          const filteredHistories = histories
+            .filter(
+              (history) => new Date(history.created as string) >= sinceDate
+            )
             .map((history) => {
-              const items = (history.items as Array<Record<string, unknown>>) || [];
-            return {
-              author:
+              const items =
+                (history.items as Array<Record<string, unknown>>) || [];
+              return {
+                author:
                   ((history.author as Record<string, unknown>)
-                  ?.displayName as string) || "Unknown",
+                    ?.displayName as string) || "Unknown",
                 created: history.created as string,
-              items: items.map((item) => ({
-                field: item.field as string,
-                from: (item.fromString as string) || null,
-                to: (item["toString"] as string) || null,
-              })),
-            };
-          });
+                items: items.map((item) => ({
+                  field: item.field as string,
+                  from: (item.fromString as string) || null,
+                  to: (item["toString"] as string) || null,
+                })),
+              };
+            });
 
-        if (filteredHistories.length > 0) {
-          const assigneeData = fields.assignee as Record<
-            string,
-            unknown
-          > | null;
-          allIssues.push({
-            key: issue.key as string,
-            summary: fields.summary as string,
-            assignee: (assigneeData?.displayName as string) || null,
-            changelog: filteredHistories,
-          });
+          if (filteredHistories.length > 0) {
+            const assigneeData = fields.assignee as Record<
+              string,
+              unknown
+            > | null;
+            allIssues.push({
+              key: issueKey,
+              summary: fields.summary as string,
+              assignee: (assigneeData?.displayName as string) || null,
+              changelog: filteredHistories,
+            });
+          }
+        } catch (err) {
+          console.error(`[Changelog] Failed to get changelog for ${issueKey}:`, err);
         }
       }
 
-      const total = data.total as number;
+      const total = searchData.total as number;
       startAt += issues.length;
 
       if (startAt >= total || issues.length === 0) break;
@@ -556,6 +671,11 @@ export function createJiraClient(config: JiraProjectConfig) {
       issueType?: string;
       assigneeAccountId?: string;
       storyPoints?: number;
+      priority?: string;
+      labels?: string[];
+      fixVersions?: string[];
+      components?: string[];
+      dueDate?: string;
     }>,
     projectKey: string,
     storyPointsFieldId?: string | null
@@ -575,8 +695,8 @@ export function createJiraClient(config: JiraProjectConfig) {
       error?: string;
     }> = [];
 
-      for (let batchStart = 0; batchStart < issues.length; batchStart += BATCH_SIZE) {
-        const batch = issues.slice(batchStart, batchStart + BATCH_SIZE);
+    for (let batchStart = 0; batchStart < issues.length; batchStart += BATCH_SIZE) {
+      const batch = issues.slice(batchStart, batchStart + BATCH_SIZE);
 
       const issueUpdates = batch.map((issue) => {
         const fields: Record<string, unknown> = {
@@ -606,13 +726,33 @@ export function createJiraClient(config: JiraProjectConfig) {
           fields[storyPointsFieldId] = issue.storyPoints;
         }
 
+        if (issue.priority) {
+          fields.priority = { name: issue.priority };
+        }
+
+        if (issue.labels && issue.labels.length > 0) {
+          fields.labels = issue.labels;
+        }
+
+        if (issue.fixVersions && issue.fixVersions.length > 0) {
+          fields.fixVersions = issue.fixVersions.map((name) => ({ name }));
+        }
+
+        if (issue.components && issue.components.length > 0) {
+          fields.components = issue.components.map((name) => ({ name }));
+        }
+
+        if (issue.dueDate) {
+          fields.duedate = issue.dueDate;
+        }
+
         return { fields };
       });
 
       try {
         const response = await jiraFetch<Record<string, unknown>>(
           "/rest/api/3/issue/bulk",
-            baseUrl,
+          baseUrl,
           {
             method: "POST",
             body: JSON.stringify({ issueUpdates }),
@@ -624,18 +764,18 @@ export function createJiraClient(config: JiraProjectConfig) {
         const errors =
           (response.errors as Array<Record<string, unknown>>) || [];
 
-          for (let issueIndex = 0; issueIndex < batch.length; issueIndex++) {
-            if (createdIssues[issueIndex]) {
+        for (let issueIndex = 0; issueIndex < batch.length; issueIndex++) {
+          if (createdIssues[issueIndex]) {
             results.push({
               status: "created",
-                key: createdIssues[issueIndex].key as string,
-                summary: batch[issueIndex].summary,
+              key: createdIssues[issueIndex].key as string,
+              summary: batch[issueIndex].summary,
             });
-            } else if (errors[issueIndex]) {
+          } else if (errors[issueIndex]) {
             results.push({
               status: "error",
-                summary: batch[issueIndex].summary,
-                error: JSON.stringify(errors[issueIndex]),
+              summary: batch[issueIndex].summary,
+              error: JSON.stringify(errors[issueIndex]),
             });
           }
         }

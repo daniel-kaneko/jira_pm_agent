@@ -336,14 +336,10 @@ async function handleGetActivity(
   config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<GetActivityResult> {
-  const sprint_ids = args.sprint_ids as number[] | undefined;
+  let sprint_ids = args.sprint_ids as number[] | undefined;
   const since = args.since as string | undefined;
   const to_status = args.to_status as string | undefined;
   const assignees = args.assignees as string[] | undefined;
-
-  if (!sprint_ids || sprint_ids.length === 0) {
-    throw new Error("sprint_ids is required");
-  }
 
   if (!since) {
     throw new Error("since is required (use YYYY-MM-DD format)");
@@ -353,7 +349,16 @@ async function handleGetActivity(
   const boardId = getBoardId(config);
 
   const boardSprints = await client.listSprints(boardId, "all", 50);
-  validateSprintIds(sprint_ids, boardSprints);
+
+  if (!sprint_ids || sprint_ids.length === 0) {
+    const activeSprint = boardSprints.find((s) => s.state === "active");
+    if (!activeSprint) {
+      throw new Error("No active sprint found. Please specify sprint_ids.");
+    }
+    sprint_ids = [activeSprint.id];
+  } else {
+    validateSprintIds(sprint_ids, boardSprints);
+  }
 
   const sinceDate = parseSinceDate(since);
   const untilDate = new Date();
@@ -530,6 +535,11 @@ async function handleCreateIssues(
         issueType: issue.issue_type || "Story",
         assigneeAccountId,
         storyPoints: issue.story_points,
+        priority: issue.priority,
+        labels: issue.labels,
+        fixVersions: issue.fix_versions,
+        components: issue.components,
+        dueDate: issue.due_date,
       };
     })
   );
@@ -626,7 +636,12 @@ async function handleUpdateIssues(
         issue.summary ||
         issue.description ||
         assigneeEmail ||
-        issue.story_points !== undefined;
+        issue.story_points !== undefined ||
+        issue.priority ||
+        issue.labels ||
+        issue.fix_versions ||
+        issue.components ||
+        issue.due_date;
 
       if (hasFieldUpdates) {
         await withRetry(() =>
@@ -637,12 +652,24 @@ async function handleUpdateIssues(
             assigneeEmail,
             storyPoints: issue.story_points,
             storyPointsFieldId,
+            priority: issue.priority,
+            labels: issue.labels,
+            fixVersions: issue.fix_versions,
+            components: issue.components,
+            dueDate: issue.due_date,
           })
         );
 
         if (issue.summary) changes.push(`summary → "${issue.summary}"`);
         if (issue.story_points !== undefined)
           changes.push(`points → ${issue.story_points}`);
+        if (issue.priority) changes.push(`priority → ${issue.priority}`);
+        if (issue.labels) changes.push(`labels → [${issue.labels.join(", ")}]`);
+        if (issue.fix_versions)
+          changes.push(`fixVersions → [${issue.fix_versions.join(", ")}]`);
+        if (issue.components)
+          changes.push(`components → [${issue.components.join(", ")}]`);
+        if (issue.due_date) changes.push(`dueDate → ${issue.due_date}`);
       }
 
       if (issue.sprint_id) {
@@ -733,6 +760,9 @@ async function handleListSprints(
 interface GetContextResult {
   team_members: string[];
   statuses: string[];
+  priorities: string[];
+  versions: string[];
+  components: string[];
 }
 
 async function handleGetContext(
@@ -743,6 +773,9 @@ async function handleGetContext(
   return {
     team_members: cachedData.teamMembers.map((member) => member.name),
     statuses: cachedData.statuses,
+    priorities: cachedData.priorities.map((p) => p.name),
+    versions: cachedData.versions.map((v) => v.name),
+    components: cachedData.components.map((c) => c.name),
   };
 }
 

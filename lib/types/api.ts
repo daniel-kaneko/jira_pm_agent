@@ -13,6 +13,12 @@ export interface PendingAction {
     issue_key?: string;
     sprint_id?: number;
     story_points?: number;
+    issue_type?: string;
+    priority?: string;
+    labels?: string[];
+    fix_versions?: string[];
+    components?: string[];
+    due_date?: string;
   }>;
 }
 

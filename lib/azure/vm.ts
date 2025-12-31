@@ -5,6 +5,8 @@ const AZURE_SUBSCRIPTION_ID = process.env.AZURE_SUBSCRIPTION_ID || "";
 const AZURE_RESOURCE_GROUP = process.env.AZURE_RESOURCE_GROUP || "";
 const AZURE_VM_NAME = process.env.AZURE_VM_NAME || "";
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "";
+const OLLAMA_AUTH_USER = process.env.OLLAMA_AUTH_USER;
+const OLLAMA_AUTH_PASS = process.env.OLLAMA_AUTH_PASS;
 
 export type VMPowerState = "running" | "deallocated" | "starting" | "stopping" | "unknown";
 
@@ -61,6 +63,22 @@ export async function getVMPowerState(): Promise<VMPowerState> {
 }
 
 /**
+ * Build authorization headers for Ollama if credentials are provided.
+ */
+function getOllamaHeaders(): HeadersInit {
+  const headers: HeadersInit = {};
+
+  if (OLLAMA_AUTH_USER && OLLAMA_AUTH_PASS) {
+    const credentials = Buffer.from(
+      `${OLLAMA_AUTH_USER}:${OLLAMA_AUTH_PASS}`
+    ).toString("base64");
+    headers["Authorization"] = `Basic ${credentials}`;
+  }
+
+  return headers;
+}
+
+/**
  * Check if Ollama is responding.
  */
 export async function checkOllamaHealth(timeoutMs = 5000): Promise<boolean> {
@@ -68,6 +86,7 @@ export async function checkOllamaHealth(timeoutMs = 5000): Promise<boolean> {
 
   try {
     const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+      headers: getOllamaHeaders(),
       signal: AbortSignal.timeout(timeoutMs),
     });
     return response.ok;

@@ -45,9 +45,9 @@ When user says "sprint 24", find "Sprint 24" in the results and use its id (e.g.
     type: "function",
     function: {
       name: "get_context",
-      description: `Get team members and available statuses. Call when you need to know who's on the team or what statuses exist.
+      description: `Get team members, statuses, priorities, versions, and components. Call to discover available field options.
 
-Returns: { team_members: ["John Doe", "Jane Smith", ...], statuses: ["To Do", "In Progress", "Done", ...] }`,
+Returns: { team_members: [...], statuses: [...], priorities: [...], versions: [...], components: [...] }`,
       parameters: {
         type: "object",
         properties: {},
@@ -197,9 +197,10 @@ Returns: { key, summary, description, status, assignee, comments: [...] }`,
       description: `Get status changes for issues in a sprint since a date.
 
 Examples:
-- get_activity(sprint_ids: [9887], since: "2024-12-23") - changes since Dec 23
-- get_activity(sprint_ids: [9887], since: "2024-12-01", to_status: "Concluído") - what moved to Done
-- get_activity(sprint_ids: [9887], since: "2024-12-20", assignees: ["John Doe"]) - John's changes
+- get_activity(since: "2025-12-31") - changes today in active sprint
+- get_activity(sprint_ids: [3625], since: "2025-12-23") - changes since Dec 23
+- get_activity(since: "2025-12-01", to_status: "Concluído") - what moved to Done
+- get_activity(since: "2025-12-20", assignees: ["John Doe"]) - John's changes
 
 Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, changed_at}] }`,
       parameters: {
@@ -207,7 +208,8 @@ Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, c
         properties: {
           sprint_ids: {
             type: "array",
-            description: "Sprint IDs from AVAILABLE SPRINTS",
+            description:
+              "Sprint IDs (defaults to active sprint if not provided)",
           },
           since: {
             type: "string",
@@ -224,7 +226,7 @@ Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, c
             description: "Filter by assignee names (from TEAM MEMBERS)",
           },
         },
-        required: ["sprint_ids", "since"],
+        required: ["since"],
       },
     },
   },
@@ -241,7 +243,7 @@ Examples:
 
 For BULK operations (10+ rows), ALWAYS use row_range instead of row_indices.
 
-mapping object: { summary_column, description_column, assignee, story_points, sprint_id, issue_type }`,
+mapping object: { summary_column, description_column, assignee, story_points, sprint_id, issue_type, priority, labels, fix_versions (column name or array), components, due_date }`,
       parameters: {
         type: "object",
         properties: {
@@ -274,7 +276,7 @@ mapping object: { summary_column, description_column, assignee, story_points, sp
 If no sprint_id is specified, issues are automatically added to the ACTIVE sprint.
 
 Example:
-- create_issues(issues: [{summary: "Actual task title", assignee: "John"}])
+- create_issues(issues: [{summary: "Task title", assignee: "John", priority: "High", labels: ["frontend"]}])
 
 Returns: { total, succeeded, failed, results: [{action, key, summary}] }`,
       parameters: {
@@ -315,6 +317,30 @@ Returns: { total, succeeded, failed, results: [{action, key, summary}] }`,
                   type: "string",
                   description: "Initial status from AVAILABLE STATUSES",
                 },
+                priority: {
+                  type: "string",
+                  description:
+                    "Priority from AVAILABLE PRIORITIES (e.g. 'High', 'Medium', 'Low')",
+                },
+                labels: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Array of label strings",
+                },
+                fix_versions: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Fix version names from AVAILABLE VERSIONS",
+                },
+                components: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Component names from AVAILABLE COMPONENTS",
+                },
+                due_date: {
+                  type: "string",
+                  description: "Due date in YYYY-MM-DD format",
+                },
               },
             },
           },
@@ -330,7 +356,7 @@ Returns: { total, succeeded, failed, results: [{action, key, summary}] }`,
       description: `Update multiple existing issues in bulk.
 
 Example:
-- update_issues(issues: [{issue_key: "PROJ-123", status: "Done"}])
+- update_issues(issues: [{issue_key: "PROJ-123", status: "Done", fix_versions: ["v2.0"]}])
 
 Returns: { total, succeeded, failed, results: [{action, key, changes}] }`,
       parameters: {
@@ -360,6 +386,29 @@ Returns: { total, succeeded, failed, results: [{action, key, changes}] }`,
                 status: {
                   type: "string",
                   description: "New status from AVAILABLE STATUSES",
+                },
+                priority: {
+                  type: "string",
+                  description: "Priority from AVAILABLE PRIORITIES",
+                },
+                labels: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "New labels (replaces existing)",
+                },
+                fix_versions: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Fix versions from AVAILABLE VERSIONS",
+                },
+                components: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Components from AVAILABLE COMPONENTS",
+                },
+                due_date: {
+                  type: "string",
+                  description: "Due date in YYYY-MM-DD format",
                 },
               },
             },

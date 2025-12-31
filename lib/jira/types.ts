@@ -74,6 +74,12 @@ export interface CreateIssueParams {
   assigneeEmail?: string;
   storyPoints?: number;
   storyPointsFieldId?: string | null;
+  priority?: string;
+  labels?: string[];
+  fixVersions?: string[];
+  components?: string[];
+  dueDate?: string;
+  customFields?: Record<string, unknown>;
 }
 
 export interface CreatedIssue {
@@ -90,6 +96,29 @@ export interface UpdateIssueParams {
   assigneeEmail?: string;
   storyPoints?: number;
   storyPointsFieldId?: string | null;
+  priority?: string;
+  labels?: string[];
+  fixVersions?: string[];
+  components?: string[];
+  dueDate?: string;
+  customFields?: Record<string, unknown>;
+}
+
+export interface JiraVersion {
+  id: string;
+  name: string;
+  released: boolean;
+  archived: boolean;
+}
+
+export interface JiraComponent {
+  id: string;
+  name: string;
+}
+
+export interface JiraPriority {
+  id: string;
+  name: string;
 }
 
 export interface JiraField {
@@ -119,7 +148,7 @@ export interface ToolPropertyDefinition {
   description: string;
   items?: {
     type: string;
-    properties?: Record<string, { type: string; description: string }>;
+    properties?: Record<string, ToolPropertyDefinition>;
   };
 }
 
@@ -183,6 +212,11 @@ export interface IssueToCreate {
   sprint_id?: number;
   story_points?: number;
   status?: string;
+  priority?: string;
+  labels?: string[];
+  fix_versions?: string[];
+  components?: string[];
+  due_date?: string;
 }
 
 export interface IssueToUpdate {
@@ -193,6 +227,11 @@ export interface IssueToUpdate {
   sprint_id?: number;
   story_points?: number;
   status?: string;
+  priority?: string;
+  labels?: string[];
+  fix_versions?: string[];
+  components?: string[];
+  due_date?: string;
 }
 
 export interface CreateIssuesArgs {
@@ -230,6 +269,11 @@ export interface PrepareIssuesMapping {
   story_points?: number;
   sprint_id?: number;
   issue_type?: string;
+  priority?: string;
+  labels?: string[];
+  fix_versions?: string | string[];
+  components?: string[];
+  due_date?: string;
 }
 
 export interface PrepareIssuesArgs {
@@ -277,6 +321,11 @@ export type ToolResultMap = {
       story_points: number | null;
       sprint_id: number | null;
       issue_type: string;
+      priority: string | null;
+      labels: string[] | null;
+      fix_versions: string[] | null;
+      components: string[] | null;
+      due_date: string | null;
     }>;
     ready_for_creation: boolean;
     errors: string[];

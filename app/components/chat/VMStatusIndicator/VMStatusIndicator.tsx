@@ -18,8 +18,6 @@ interface StatusDisplay {
   label: string;
 }
 
-const POLL_INTERVAL_MS = 30000;
-
 /**
  * Get display properties based on VM status.
  */
@@ -77,6 +75,8 @@ function getColorVar(color: IndicatorColor): string {
 
 /**
  * VM Status indicator that shows Ollama/VM availability.
+ * Checks status on page load only (no polling to avoid keeping VM awake).
+ * Updates naturally when AI requests succeed/fail.
  * - Green: AI ready
  * - Yellow: Starting/waking
  * - Red: Stopped/error
@@ -106,9 +106,6 @@ export function VMStatusIndicator() {
 
   useEffect(() => {
     fetchStatus();
-
-    const interval = setInterval(fetchStatus, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
   }, [fetchStatus]);
 
   const display = getStatusDisplay(status, loading);
@@ -129,7 +126,7 @@ export function VMStatusIndicator() {
 
       {showTooltip && (
         <div
-          className="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-1 text-xs rounded whitespace-nowrap z-50"
+          className="absolute left-0 top-full mt-2 px-2 py-1 text-xs rounded whitespace-nowrap z-50"
           style={{
             backgroundColor: "var(--bg-soft)",
             border: "1px solid var(--bg-highlight)",

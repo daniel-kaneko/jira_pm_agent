@@ -8,9 +8,9 @@ function getSessionSecret(): string {
 
 function simpleHash(str: string): string {
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+  for (let charIndex = 0; charIndex < str.length; charIndex++) {
+    const charCode = str.charCodeAt(charIndex);
+    hash = ((hash << 5) - hash) + charCode;
     hash = hash & hash;
   }
   return Math.abs(hash).toString(16).padStart(16, "0").slice(0, 16);

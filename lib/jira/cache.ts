@@ -72,7 +72,7 @@ function findFields(fields: JiraField[]): FieldMappings {
     let fieldId: string | null = null;
 
     for (const pattern of search.patterns) {
-      const match = fields.find((f) => f.custom && pattern.test(f.name));
+      const match = fields.find((field) => field.custom && pattern.test(field.name));
       if (match) {
         console.log(`[Cache] Found ${search.key}: ${match.id} - ${match.name}`);
         fieldId = match.id;
@@ -82,8 +82,8 @@ function findFields(fields: JiraField[]): FieldMappings {
 
     if (!fieldId && search.fallbackIncludes) {
       const fallback = fields.find(
-        (f) =>
-          f.custom && f.name.toLowerCase().includes(search.fallbackIncludes)
+        (field) =>
+          field.custom && field.name.toLowerCase().includes(search.fallbackIncludes)
       );
       if (fallback) {
         console.log(
@@ -131,7 +131,7 @@ export async function refreshCache(): Promise<CacheData> {
 
   cache = {
     sprints: allSprints.filter(
-      (s) => s.state === "active" || s.state === "closed"
+      (sprint) => sprint.state === "active" || sprint.state === "closed"
     ),
     statuses,
     teamMembers,

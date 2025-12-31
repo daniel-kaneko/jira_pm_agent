@@ -51,16 +51,16 @@ export function OceanEffect({ enabled }: OceanEffectProps) {
       ctx.clearRect(0, 0, width, height);
 
       ctx.globalAlpha = config.causticOpacity;
-      for (let i = 0; i < 3; i++) {
-        const offset = time * 0.0005 + i * 2;
+      for (let waveLayer = 0; waveLayer < 3; waveLayer++) {
+        const offset = time * 0.0005 + waveLayer * 2;
         ctx.beginPath();
-        for (let x = 0; x < width; x += 20) {
-          const y = Math.sin(x * 0.01 + offset) * 30 + height * 0.3;
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+        for (let xPos = 0; xPos < width; xPos += 20) {
+          const yPos = Math.sin(xPos * 0.01 + offset) * 30 + height * 0.3;
+          if (xPos === 0) ctx.moveTo(xPos, yPos);
+          else ctx.lineTo(xPos, yPos);
         }
-        ctx.strokeStyle = `rgba(100, 200, 255, ${0.1 - i * 0.02})`;
-        ctx.lineWidth = 40 + i * 20;
+        ctx.strokeStyle = `rgba(100, 200, 255, ${0.1 - waveLayer * 0.02})`;
+        ctx.lineWidth = 40 + waveLayer * 20;
         ctx.stroke();
       }
       ctx.globalAlpha = 1;

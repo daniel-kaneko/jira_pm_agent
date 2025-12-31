@@ -12,19 +12,22 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 - 🔍 Smart search across sprints, assignees, and statuses
 - 📊 Sprint comparison and productivity analysis
 - 📋 Interactive issue tables with filtering, sorting, and CSV export
+- 📎 **CSV upload for bulk operations** - Upload CSV files to create issues in bulk
 - ✏️ Create and update issues with confirmation workflow
 - 📈 Track status changes and activity over time
 - 🎨 Multiple themes with visual effects
 - ⚡ Streaming responses with reasoning display
 - 🔄 Smart context management for follow-up questions
 - 🔐 Simple authentication with environment-based credentials
+- 🤖 **Agentic RAG** - AI dynamically retrieves context via tools
 
 ## Tech Stack
 
-- **Frontend**: Next.js 15, React 19, Tailwind CSS 4
-- **AI/ML**: Ollama (qwen2.5:7b or other models)
+- **Frontend**: Next.js 16, React 19, Tailwind CSS 4
+- **AI/ML**: Ollama (qwen2.5:14b recommended, supports other models)
 - **Integration**: Jira REST API v3
-- **Styling**: JetBrains Mono font, 10 themes
+- **CSV Parsing**: Papa Parse (client-side)
+- **Styling**: JetBrains Mono font, 13 themes with effects
 
 ## Getting Started
 
@@ -82,17 +85,25 @@ To find your board ID:
 2. Look at the URL: `https://your-domain.atlassian.net/jira/software/projects/PROJ/boards/123`
 3. The number at the end (123) is your board ID
 
-4. **Start development server**:
+3. **Start development server**:
 
 ```bash
 pnpm dev
 ```
 
-6. Open [http://localhost:3000](http://localhost:3000)
+4. Open [http://localhost:3000](http://localhost:3000)
 
 ## AI Tools
 
-The agent has access to these Jira tools:
+The agent uses an **Agentic RAG** approach - the AI dynamically retrieves context via tools rather than receiving everything upfront.
+
+### Context Tools
+
+| Tool           | Description                                       |
+| -------------- | ------------------------------------------------- |
+| `list_sprints` | Get available sprints with IDs (called on demand) |
+| `get_context`  | Get team members and statuses                     |
+| `query_csv`    | Query uploaded CSV data (client-side)             |
 
 ### Read Tools
 
@@ -113,9 +124,17 @@ The agent has access to these Jira tools:
 
 Write operations require user confirmation before execution.
 
-### Cached Data
+## CSV Upload
 
-Sprint list, status list, and team members are cached (7-day TTL) and provided to the AI automatically, reducing API calls.
+Upload CSV files to bulk create Jira issues:
+
+1. Click the 📎 paperclip icon next to the chat input
+2. Select a CSV file (columns are auto-detected)
+3. The AI will analyze the structure and show filterable columns
+4. Ask the AI to create issues: "Create stories for all B2B items"
+5. Confirm the bulk creation when prompted
+
+CSV data is stored client-side (in browser memory) and parsed using Papa Parse.
 
 ## Issue Tables
 
@@ -140,18 +159,25 @@ For sprint comparisons, issues are displayed in side-by-side columns with synchr
 
 ## Themes
 
-The chat interface supports multiple themes:
+The chat interface supports multiple themes with optional visual effects:
 
-- Grey (default)
-- Gruvbox
-- Nord
-- Tokyo Night
-- Catppuccin
-- Matrix (with rain effect)
-- Christmas (with snow effect)
-- Space (with warp effect)
-- Night Sky (with rotation effect)
-- Synthwave (with grid effect)
+| Theme     | Effect         |
+| --------- | -------------- |
+| Grey      | -              |
+| Gruvbox   | -              |
+| Nord      | -              |
+| Tokyo Night | -            |
+| Catppuccin | -             |
+| Matrix    | Rain effect    |
+| Christmas | Snow effect    |
+| Space     | Warp effect    |
+| Night Sky | Stars rotation |
+| Synthwave | Grid animation |
+| Ocean     | Wave effect    |
+| Cyberpunk | Neon glow      |
+| Sakura    | Petals falling |
+
+Toggle effects on/off via the theme selector.
 
 ## Project Structure
 
@@ -161,26 +187,32 @@ jira-pm-agent/
 │   ├── api/
 │   │   ├── ask/              # Chat API endpoint with AI orchestration
 │   │   ├── auth/             # Login/logout endpoints
-│   │   └── jira/tools/       # Jira tools API
+│   │   ├── jira/tools/       # Jira tools API
+│   │   └── vm/               # Azure VM wake/status endpoints
 │   ├── components/           # React components
-│   │   └── chat/             # Chat UI components
-│   │       ├── IssueListCard/    # Interactive issue table
-│   │       ├── SprintComparisonCard/ # Multi-sprint comparison
-│   │       └── ...
+│   │   ├── chat/             # Chat UI components
+│   │   │   ├── IssueListCard/    # Interactive issue table
+│   │   │   ├── SprintComparisonCard/ # Multi-sprint comparison
+│   │   │   └── ...
+│   │   └── themes/           # Theme visual effects
 │   ├── login/                # Login page
 │   ├── globals.css           # Global styles & themes
 │   ├── layout.tsx            # Root layout
 │   └── page.tsx              # Main page
+├── components/
+│   └── CSVUpload.tsx         # CSV upload button component
+├── contexts/
+│   └── CSVContext.tsx        # CSV state management (client-side)
 ├── hooks/
 │   └── useChat.ts            # Chat state management
 ├── lib/
 │   ├── constants.ts          # App constants
-│   ├── types/                # TypeScript types
+│   ├── ollama.ts             # Ollama API client
 │   └── jira/                 # Jira integration
 │       ├── client.ts         # Jira API client
 │       ├── tools.ts          # Tool definitions for AI
 │       ├── executor.ts       # Tool execution logic
-│       ├── prompts.ts        # AI system prompt
+│       ├── prompts.ts        # Minimal AI system prompt
 │       ├── cache.ts          # Sprint/status/team caching
 │       └── types.ts          # Jira-specific types
 ├── middleware.ts             # Auth middleware
@@ -222,7 +254,9 @@ AUTH_PASSWORD_HASH=$2b$06$xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 Session tokens are signed using the password as the secret.
 
-## Deployment (Vercel)
+## Deployment
+
+### Vercel (Frontend)
 
 1. **Deploy to Vercel**:
 
@@ -247,6 +281,36 @@ vercel
 | `OLLAMA_AUTH_PASS`   | Basic auth password (if needed)     |
 
 3. **Redeploy** after setting environment variables.
+
+### Azure VM (Ollama Backend)
+
+For self-hosted Ollama with GPU support:
+
+1. **Create Azure VM** with NC-series (e.g., NC8as_T4_v3 for Tesla T4)
+2. **Install NVIDIA drivers and Docker** with GPU support
+3. **Run Ollama and Chroma** via Docker Compose:
+
+```yaml
+services:
+  ollama:
+    image: ollama/ollama
+    runtime: nvidia
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+  chroma:
+    image: chromadb/chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+```
+
+4. **Set up Nginx** with basic auth for public access
+5. **Configure Vercel** env vars to point to the VM's public IP
+
+Optional: Set up wake-on-demand to save costs by auto-deallocating the VM after inactivity.
 
 ## License
 

@@ -46,7 +46,6 @@ export function CSVProvider({ children }: { children: React.ReactNode }) {
           const rows = results.data as CSVRow[];
           const columns = results.meta.fields || [];
 
-          // Calculate column stats (unique values for filtering)
           const columnStats: Record<string, { uniqueValues: string[]; count: number }> = {};
           columns.forEach((col) => {
             const values = new Set<string>();
@@ -54,7 +53,7 @@ export function CSVProvider({ children }: { children: React.ReactNode }) {
               if (row[col]) values.add(row[col]);
             });
             columnStats[col] = {
-              uniqueValues: Array.from(values).slice(0, 20), // Limit to 20 for display
+              uniqueValues: Array.from(values).slice(0, 20),
               count: values.size,
             };
           });
@@ -92,14 +91,11 @@ export function CSVProvider({ children }: { children: React.ReactNode }) {
       if (!csvData) return [];
 
       let filtered = csvData;
-
-      // Apply filters
       Object.entries(filters).forEach(([column, value]) => {
-        if (value) {
-          filtered = filtered.filter((row) =>
-            row[column]?.toLowerCase().includes(value.toLowerCase())
-          );
-        }
+        if (!value) return;
+        filtered = filtered.filter((row) =>
+          row[column]?.toLowerCase().includes(value.toLowerCase())
+        );
       });
 
       return filtered.slice(0, limit);

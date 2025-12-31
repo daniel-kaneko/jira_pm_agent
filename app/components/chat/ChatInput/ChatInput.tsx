@@ -21,10 +21,9 @@ export function ChatInput({
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      onSubmit();
-    }
+    if (e.key !== "Enter" || e.shiftKey) return;
+    e.preventDefault();
+    onSubmit();
   };
 
   const handleInput = (e: React.FormEvent<HTMLTextAreaElement>): void => {
@@ -37,7 +36,6 @@ export function ChatInput({
     <footer className="shrink-0 bg-[var(--bg-soft)] border-t border-[var(--bg-highlight)]">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-start gap-2 px-4 py-3">
-          {leftActions}
           <span className="text-[var(--yellow)] py-2 shrink-0">
             {isLoading ? "~" : ":"}
           </span>
@@ -53,6 +51,7 @@ export function ChatInput({
             className="flex-1 bg-transparent resize-none outline-none text-[var(--fg)] placeholder:text-[var(--fg-muted)] py-2 disabled:opacity-50"
             style={{ minHeight: "24px", height: "auto" }}
           />
+          {leftActions}
         </div>
         <div className="px-4 pb-2 text-xs text-[var(--fg-muted)] flex justify-between">
           <span>

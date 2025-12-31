@@ -68,14 +68,14 @@ function resolveName(
     if (matches.length === 0) {
       throw new Error(
         `"${input}" not found in team. Available: ${cachedTeam
-          .map((m) => m.name)
+          .map((member) => member.name)
           .join(", ")}`
       );
     }
     if (matches.length > 1) {
       throw new Error(
         `Multiple matches for "${input}": ${matches
-          .map((m) => m.name)
+          .map((member) => member.name)
           .join(", ")}. Be more specific.`
       );
     }
@@ -92,7 +92,7 @@ function validateSprintIds(
   sprintIds: number[],
   availableSprints: Array<{ id: number }>
 ): void {
-  const validIds = availableSprints.map((s) => s.id);
+  const validIds = availableSprints.map((sprint) => sprint.id);
   const invalidIds = sprintIds.filter((id) => !validIds.includes(id));
   if (invalidIds.length > 0) {
     throw new Error(
@@ -134,8 +134,8 @@ function applyFilters<T>(
   filters: Array<IssueFilter<T> | null>
 ): T[] {
   return filters
-    .filter((f): f is IssueFilter<T> => f !== null)
-    .reduce((acc, filter) => acc.filter(filter), items);
+    .filter((filterFn): filterFn is IssueFilter<T> => filterFn !== null)
+    .reduce((acc, filterFn) => acc.filter(filterFn), items);
 }
 
 async function handlePrepareSearch(
@@ -155,21 +155,21 @@ async function handlePrepareSearch(
   ]);
 
   if (!sprintIds || sprintIds.length === 0) {
-    const activeSprint = allSprints.find((s) => s.state === "active");
+    const activeSprint = allSprints.find((sprint) => sprint.state === "active");
     sprintIds = activeSprint ? [activeSprint.id] : [allSprints[0]?.id];
   } else {
     validateSprintIds(sprintIds, allSprints);
   }
 
   const sprintInfos = sprintIds.map((sprintId) => {
-    const sprint = allSprints.find((s) => s.id === sprintId)!;
+    const sprint = allSprints.find((sp) => sp.id === sprintId)!;
     return { id: sprint.id, name: sprint.name, state: sprint.state };
   });
 
   if (names.length === 0) {
     return {
       all_team: true,
-      team_members: cachedTeam.map((m) => m.email),
+      team_members: cachedTeam.map((member) => member.email),
       board: { name: boardInfo.name, project_name: boardInfo.project_name },
       sprints: sprintInfos,
     };
@@ -197,7 +197,7 @@ async function handlePrepareSearch(
       });
     }
 
-    const matchingEmails = matchingMembers.map((m) => m.email);
+    const matchingEmails = matchingMembers.map((member) => member.email);
 
     return {
       name: nameInput,
@@ -252,7 +252,7 @@ async function handleGetSprintIssues(
         storyPointsFieldId
       );
 
-      const sprintInfo = boardSprints.find((s) => s.id === sprintId);
+      const sprintInfo = boardSprints.find((sprint) => sprint.id === sprintId);
 
       const filteredIssues = applyFilters(result.issues, [
         resolvedEmails?.length ? createAssigneeFilter(resolvedEmails) : null,
@@ -385,8 +385,9 @@ async function handleGetActivity(
         if (resolvedAssignees && issue.assignee) {
           const issueAssigneeLower = issue.assignee.toLowerCase();
           const matchesAssignee = resolvedAssignees.some(
-            (a) =>
-              issueAssigneeLower.includes(a) || a.includes(issueAssigneeLower)
+            (assignee) =>
+              issueAssigneeLower.includes(assignee) ||
+              assignee.includes(issueAssigneeLower)
           );
           if (!matchesAssignee) continue;
         }
@@ -439,12 +440,14 @@ async function transitionIfNeeded(
   if (currentStatus?.toLowerCase() === statusLower) return currentStatus;
 
   const transitions = await jiraClient.getTransitions(issueKey);
-  const match = transitions.find((t) => t.name.toLowerCase() === statusLower);
+  const match = transitions.find(
+    (transition) => transition.name.toLowerCase() === statusLower
+  );
 
   if (!match) {
     throw new Error(
       `Cannot transition to "${targetStatus}". Available: ${transitions
-        .map((t) => t.name)
+        .map((transition) => transition.name)
         .join(", ")}`
     );
   }
@@ -465,7 +468,7 @@ async function moveToSprintIfNeeded(
 
   await jiraClient.moveIssuesToSprint(sprintId, [issueKey]);
   const sprints = await jiraClient.listSprints(boardId, "all", 50);
-  const sprint = sprints.find((s) => s.id === sprintId);
+  const sprint = sprints.find((sp) => sp.id === sprintId);
   return sprint?.name || `Sprint ${sprintId}`;
 }
 
@@ -574,14 +577,14 @@ const RETRY_DELAY_MS = 1000;
 const MAX_RETRIES = 3;
 
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
-  for (let i = 0; i < MAX_RETRIES; i++) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       return await fn();
     } catch (err) {
       const status = (err as { status?: number }).status;
-      if (status === 429 && i < MAX_RETRIES - 1) {
+      if (status === 429 && attempt < MAX_RETRIES - 1) {
         await new Promise((resolve) =>
-          setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, i))
+          setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, attempt))
         );
         continue;
       }
@@ -637,9 +640,9 @@ async function handleCreateIssues(
   let succeeded = 0;
   let failed = 0;
 
-  for (let i = 0; i < bulkResults.length; i++) {
-    const result = bulkResults[i];
-    const originalIssue = issues[i];
+  for (let resultIndex = 0; resultIndex < bulkResults.length; resultIndex++) {
+    const result = bulkResults[resultIndex];
+    const originalIssue = issues[resultIndex];
 
     if (result.status === "created" && result.key) {
       if (originalIssue.sprint_id) {
@@ -649,18 +652,14 @@ async function handleCreateIssues(
               result.key!,
             ])
           );
-        } catch {
-          /* ignore sprint move errors */
-        }
+        } catch {}
       }
       if (originalIssue.status && originalIssue.status !== "Backlog") {
         try {
           await withRetry(() =>
             transitionIfNeeded(result.key!, originalIssue.status)
           );
-        } catch {
-          /* ignore transition errors */
-        }
+        } catch {}
       }
 
       results.push({
@@ -824,10 +823,10 @@ async function handleListSprints(
   );
 
   return {
-    sprints: sprints.map((s) => ({
-      id: s.id,
-      name: s.name,
-      state: s.state,
+    sprints: sprints.map((sprint) => ({
+      id: sprint.id,
+      name: sprint.name,
+      state: sprint.state,
     })),
     hint: "Use the 'id' number (e.g., 9887) when calling get_sprint_issues. When user says 'sprint 24', find 'Sprint 24' above and use its id.",
   };
@@ -842,7 +841,7 @@ async function handleGetContext(): Promise<GetContextResult> {
   const cachedData = await getCachedData();
 
   return {
-    team_members: cachedData.teamMembers.map((m) => m.name),
+    team_members: cachedData.teamMembers.map((member) => member.name),
     statuses: cachedData.statuses,
   };
 }

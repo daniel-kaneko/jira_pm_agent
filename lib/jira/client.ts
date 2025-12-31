@@ -429,9 +429,9 @@ export const jiraClient = {
     const transitions =
       (data.transitions as Array<Record<string, unknown>>) || [];
 
-    return transitions.map((t) => ({
-      id: t.id as string,
-      name: t.name as string,
+    return transitions.map((transition) => ({
+      id: transition.id as string,
+      name: transition.name as string,
     }));
   },
 
@@ -528,14 +528,14 @@ export const jiraClient = {
           (changelogData?.histories as Array<Record<string, unknown>>) || [];
 
         const filteredHistories = histories
-          .filter((h) => new Date(h.created as string) >= sinceDate)
-          .map((h) => {
-            const items = (h.items as Array<Record<string, unknown>>) || [];
+          .filter((history) => new Date(history.created as string) >= sinceDate)
+          .map((history) => {
+            const items = (history.items as Array<Record<string, unknown>>) || [];
             return {
               author:
-                ((h.author as Record<string, unknown>)
+                ((history.author as Record<string, unknown>)
                   ?.displayName as string) || "Unknown",
-              created: h.created as string,
+              created: history.created as string,
               items: items.map((item) => ({
                 field: item.field as string,
                 from: (item.fromString as string) || null,
@@ -600,8 +600,8 @@ export const jiraClient = {
       error?: string;
     }> = [];
 
-    for (let i = 0; i < issues.length; i += BATCH_SIZE) {
-      const batch = issues.slice(i, i + BATCH_SIZE);
+    for (let batchStart = 0; batchStart < issues.length; batchStart += BATCH_SIZE) {
+      const batch = issues.slice(batchStart, batchStart + BATCH_SIZE);
 
       const issueUpdates = batch.map((issue) => {
         const fields: Record<string, unknown> = {
@@ -648,18 +648,18 @@ export const jiraClient = {
         const errors =
           (response.errors as Array<Record<string, unknown>>) || [];
 
-        for (let j = 0; j < batch.length; j++) {
-          if (createdIssues[j]) {
+        for (let issueIndex = 0; issueIndex < batch.length; issueIndex++) {
+          if (createdIssues[issueIndex]) {
             results.push({
               status: "created",
-              key: createdIssues[j].key as string,
-              summary: batch[j].summary,
+              key: createdIssues[issueIndex].key as string,
+              summary: batch[issueIndex].summary,
             });
-          } else if (errors[j]) {
+          } else if (errors[issueIndex]) {
             results.push({
               status: "error",
-              summary: batch[j].summary,
-              error: JSON.stringify(errors[j]),
+              summary: batch[issueIndex].summary,
+              error: JSON.stringify(errors[issueIndex]),
             });
           }
         }

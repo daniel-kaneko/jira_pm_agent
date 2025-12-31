@@ -296,7 +296,6 @@ async function* orchestrate(
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
   cookieHeader: string
 ): AsyncGenerator<StreamEvent> {
-  // Minimal prompt - AI uses tools to get context it needs
   const systemPrompt = generateSystemPrompt();
 
   const messages: ChatMessage[] = [

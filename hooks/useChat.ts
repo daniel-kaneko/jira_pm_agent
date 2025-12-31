@@ -9,21 +9,21 @@ import type { StreamEvent } from "@/lib/types";
  */
 function extractFiltersFromQuestion(question: string): QueryContext {
   const context: QueryContext = {};
-  const q = question.toLowerCase();
+  const questionLower = question.toLowerCase();
   
-  const sprintMatch = q.match(/sprint\s*(\d+)/i);
+  const sprintMatch = questionLower.match(/sprint\s*(\d+)/i);
   if (sprintMatch) {
     context.sprint_ids = [parseInt(sprintMatch[1])];
   }
   
   const statusFilters: string[] = [];
-  if (/\b(done|completed|concluído)\b/i.test(q)) statusFilters.push("done");
-  if (/\b(ui review)\b/i.test(q)) statusFilters.push("ui review");
-  if (/\b(in progress|em progresso)\b/i.test(q)) statusFilters.push("in_progress");
-  if (/\b(blocked|bloqueado)\b/i.test(q)) statusFilters.push("blocked");
-  if (/\b(in qa)\b/i.test(q)) statusFilters.push("in qa");
-  if (/\b(in uat)\b/i.test(q)) statusFilters.push("in uat");
-  if (/\b(backlog)\b/i.test(q)) statusFilters.push("backlog");
+  if (/\b(done|completed|concluído)\b/i.test(questionLower)) statusFilters.push("done");
+  if (/\b(ui review)\b/i.test(questionLower)) statusFilters.push("ui review");
+  if (/\b(in progress|em progresso)\b/i.test(questionLower)) statusFilters.push("in_progress");
+  if (/\b(blocked|bloqueado)\b/i.test(questionLower)) statusFilters.push("blocked");
+  if (/\b(in qa)\b/i.test(questionLower)) statusFilters.push("in qa");
+  if (/\b(in uat)\b/i.test(questionLower)) statusFilters.push("in uat");
+  if (/\b(backlog)\b/i.test(questionLower)) statusFilters.push("backlog");
   if (statusFilters.length > 0) {
     context.status_filters = statusFilters;
   }
@@ -167,8 +167,7 @@ export function useChat() {
 
               switch (event.type) {
                 case "reasoning":
-                  if (!event.content) break;
-                  addReasoningStep({ type: "thinking", content: event.content });
+                  if (event.content) addReasoningStep({ type: "thinking", content: event.content });
                   break;
 
                 case "tool_call": {
@@ -177,7 +176,6 @@ export function useChat() {
                     ? ` (${Object.entries(event.arguments).map(([key, value]) => `${key}: ${value}`).join(", ")})`
                     : "";
                   addReasoningStep({ type: "tool_call", content: `→ ${event.tool}${argsStr}` });
-                  
                   if (event.tool === "get_sprint_issues" && event.arguments) {
                     const args = event.arguments as Record<string, unknown>;
                     queryContextRef.current = {
@@ -190,8 +188,7 @@ export function useChat() {
                 }
 
                 case "tool_result":
-                  if (!event.content) break;
-                  addReasoningStep({ type: "tool_result", content: `← ${event.content}` });
+                  if (event.content) addReasoningStep({ type: "tool_result", content: `← ${event.content}` });
                   break;
 
                 case "chunk":
@@ -201,14 +198,11 @@ export function useChat() {
                   break;
 
                 case "error":
-                  assistantContent = `Error: ${event.content}`;
-                  updateAssistantMessage(assistantContent);
+                  updateAssistantMessage(`Error: ${event.content}`);
                   break;
 
                 case "structured_data":
-                  if (event.data) {
-                    structuredDataRef.current = [...structuredDataRef.current, event.data as StructuredData];
-                  }
+                  if (event.data) structuredDataRef.current = [...structuredDataRef.current, event.data as StructuredData];
                   break;
 
                 case "done": {

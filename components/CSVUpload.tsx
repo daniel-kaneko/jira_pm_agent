@@ -13,15 +13,9 @@ export function CSVUpload({ onUploadComplete, disabled }: CSVUploadProps) {
   const { loadCSV, csvSummary, isLoading, clearCSV, getCSVForAI } = useCSV();
 
   const handleClick = () => {
-    if (csvSummary) {
-      // Already have CSV loaded, ask if they want to replace
-      if (confirm("Replace current CSV?")) {
-        clearCSV();
-        fileInputRef.current?.click();
-      }
-    } else {
-      fileInputRef.current?.click();
-    }
+    if (csvSummary && !confirm("Replace current CSV?")) return;
+    if (csvSummary) clearCSV();
+    fileInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,13 +24,11 @@ export function CSVUpload({ onUploadComplete, disabled }: CSVUploadProps) {
 
     try {
       await loadCSV(file);
-      const aiSummary = getCSVForAI();
-      onUploadComplete?.(aiSummary);
+      onUploadComplete?.(getCSVForAI());
     } catch (err) {
       console.error("Failed to parse CSV:", err);
     }
 
-    // Reset input so same file can be selected again
     e.target.value = "";
   };
 
@@ -74,12 +66,12 @@ export function CSVUpload({ onUploadComplete, disabled }: CSVUploadProps) {
           display: flex;
           align-items: center;
           justify-content: center;
-          color: ${csvSummary ? "#10b981" : "#6b7280"};
+          color: ${csvSummary ? "var(--green, #10b981)" : "var(--fg-muted, #6b7280)"};
           transition: all 0.2s;
         }
         .csv-upload-button:hover:not(:disabled) {
-          background: rgba(255, 255, 255, 0.1);
-          color: ${csvSummary ? "#34d399" : "#9ca3af"};
+          background: var(--bg-highlight, rgba(255, 255, 255, 0.1));
+          color: ${csvSummary ? "var(--green, #34d399)" : "var(--fg-dim, #9ca3af)"};
         }
         .csv-upload-button:disabled {
           opacity: 0.5;

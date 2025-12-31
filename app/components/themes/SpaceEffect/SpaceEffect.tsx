@@ -87,11 +87,11 @@ export function SpaceEffect({ enabled }: SpaceEffectProps) {
           continue;
         }
 
-        const k = 200;
-        const screenX = (star.x / star.z) * k + centerX;
-        const screenY = (star.y / star.z) * k + centerY;
-        const prevScreenX = (star.x / star.prevZ) * k + centerX;
-        const prevScreenY = (star.y / star.prevZ) * k + centerY;
+        const perspectiveScale = 200;
+        const screenX = (star.x / star.z) * perspectiveScale + centerX;
+        const screenY = (star.y / star.z) * perspectiveScale + centerY;
+        const prevScreenX = (star.x / star.prevZ) * perspectiveScale + centerX;
+        const prevScreenY = (star.y / star.prevZ) * perspectiveScale + centerY;
 
         const depth = 1 - star.z / config.maxDepth;
         const radius = Math.max(0.5, star.size * depth * 3);

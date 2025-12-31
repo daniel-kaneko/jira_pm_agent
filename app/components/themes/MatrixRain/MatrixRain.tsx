@@ -33,18 +33,18 @@ export function MatrixRain({ enabled }: MatrixRainProps) {
       ctx.font = `${config.fontSize}px monospace`;
 
       const drops = dropsRef.current;
-      for (let i = 0; i < drops.length; i++) {
+      for (let column = 0; column < drops.length; column++) {
         const char = config.chars[Math.floor(Math.random() * config.chars.length)];
-        const x = i * config.fontSize;
-        const y = drops[i] * config.fontSize;
+        const xPos = column * config.fontSize;
+        const yPos = drops[column] * config.fontSize;
 
         ctx.globalAlpha = 0.3 + Math.random() * 0.4;
-        ctx.fillText(char, x, y);
+        ctx.fillText(char, xPos, yPos);
 
-        if (y > height && Math.random() > 0.975) {
-          drops[i] = 0;
+        if (yPos > height && Math.random() > 0.975) {
+          drops[column] = 0;
         }
-        drops[i] += config.speed;
+        drops[column] += config.speed;
       }
     },
     []

@@ -104,13 +104,13 @@ export function SynthwaveEffect({ enabled }: SynthwaveEffectProps) {
       ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
       ctx.clip();
       ctx.fillStyle = "#0a0010";
-      for (let i = 0; i < 5; i++) {
-        const y = sunY + sunRadius * 0.1 + i * sunRadius * 0.22;
+      for (let stripe = 0; stripe < 5; stripe++) {
+        const stripeY = sunY + sunRadius * 0.1 + stripe * sunRadius * 0.22;
         ctx.fillRect(
           sunX - sunRadius,
-          y,
+          stripeY,
           sunRadius * 2,
-          sunRadius * 0.08 + i * 2
+          sunRadius * 0.08 + stripe * 2
         );
       }
       ctx.restore();
@@ -141,10 +141,10 @@ export function SynthwaveEffect({ enabled }: SynthwaveEffectProps) {
       ctx.lineWidth = 1;
 
       const verticalLines = 20;
-      for (let i = -verticalLines; i <= verticalLines; i++) {
-        const t = (i + verticalLines) / (verticalLines * 2);
-        const startX = sunLeftEdge + t * (sunRightEdge - sunLeftEdge);
-        const endX = -screenOverflow + t * (width + screenOverflow * 2);
+      for (let lineIndex = -verticalLines; lineIndex <= verticalLines; lineIndex++) {
+        const normalizedPosition = (lineIndex + verticalLines) / (verticalLines * 2);
+        const startX = sunLeftEdge + normalizedPosition * (sunRightEdge - sunLeftEdge);
+        const endX = -screenOverflow + normalizedPosition * (width + screenOverflow * 2);
 
         ctx.beginPath();
         ctx.moveTo(startX, horizonY);
@@ -154,8 +154,8 @@ export function SynthwaveEffect({ enabled }: SynthwaveEffectProps) {
 
       gridOffsetRef.current = (gridOffsetRef.current + config.speed) % 100;
 
-      for (let i = 0; i <= 15; i++) {
-        const progress = (i / 15 + gridOffsetRef.current / 100) % 1;
+      for (let gridLine = 0; gridLine <= 15; gridLine++) {
+        const progress = (gridLine / 15 + gridOffsetRef.current / 100) % 1;
         const perspectiveY = horizonY + Math.pow(progress, 2) * gridHeight;
 
         if (perspectiveY > horizonY) {

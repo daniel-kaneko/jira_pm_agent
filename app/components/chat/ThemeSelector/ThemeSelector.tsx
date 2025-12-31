@@ -53,7 +53,7 @@ export function ThemeSelector({
     router.push("/login");
   };
 
-  const currentThemeConfig = themes.find((t) => t.id === currentTheme);
+  const currentThemeConfig = themes.find((theme) => theme.id === currentTheme);
   const currentHasEffect = currentThemeConfig?.hasEffect ?? false;
 
   return (

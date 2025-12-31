@@ -22,11 +22,9 @@ import {
 } from "./components/themes";
 import { useChat } from "@/hooks/useChat";
 import { CSVUpload } from "@/components/CSVUpload";
-import { useCSV } from "@/contexts/CSVContext";
 
 export default function Home() {
   const { messages, isLoading, reasoning, sendMessage } = useChat();
-  const { csvSummary } = useCSV();
   const [input, setInput] = useState("");
   const [theme, setTheme] = useState<Theme>("grey");
   const [effectsEnabled, setEffectsEnabled] = useState(false);

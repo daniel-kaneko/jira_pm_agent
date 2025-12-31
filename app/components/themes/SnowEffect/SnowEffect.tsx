@@ -165,10 +165,10 @@ function drawTree(
 
   ctx.fillStyle = `rgba(20, 50, 30, ${opacity})`;
   const layers = 4;
-  for (let i = 0; i < layers; i++) {
-    const layerWidth = treeHeight * (0.5 - i * 0.08);
+  for (let layer = 0; layer < layers; layer++) {
+    const layerWidth = treeHeight * (0.5 - layer * 0.08);
     const layerHeight = treeHeight * 0.3;
-    const layerY = baseY - trunkHeight - i * layerHeight * 0.7;
+    const layerY = baseY - trunkHeight - layer * layerHeight * 0.7;
 
     ctx.beginPath();
     ctx.moveTo(x, layerY - layerHeight);
@@ -179,9 +179,9 @@ function drawTree(
   }
 
   ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.3})`;
-  for (let i = 0; i < layers; i++) {
-    const layerWidth = treeHeight * (0.5 - i * 0.08) * 0.3;
-    const layerY = baseY - trunkHeight - i * (treeHeight * 0.3) * 0.7;
+  for (let layer = 0; layer < layers; layer++) {
+    const layerWidth = treeHeight * (0.5 - layer * 0.08) * 0.3;
+    const layerY = baseY - trunkHeight - layer * (treeHeight * 0.3) * 0.7;
 
     ctx.beginPath();
     ctx.moveTo(x, layerY - treeHeight * 0.1 - treeHeight * 0.2);

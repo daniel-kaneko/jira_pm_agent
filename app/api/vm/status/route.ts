@@ -24,7 +24,7 @@ export async function GET(): Promise<Response> {
     );
 
     const powerState =
-      instanceView.statuses?.find((s) => s.code?.startsWith("PowerState/"))?.code ||
+      instanceView.statuses?.find((status) => status.code?.startsWith("PowerState/"))?.code ||
       "Unknown";
 
     return NextResponse.json({

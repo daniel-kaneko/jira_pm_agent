@@ -5,6 +5,12 @@
 
 import type { IssueListData } from "./IssueListCard";
 import type { AssigneeBreakdownData } from "./AssigneeBreakdownCard";
+import type { QueryContext } from "@/lib/utils";
+
+/**
+ * Sort direction for table columns
+ */
+export type SortDirection = "asc" | "desc";
 
 /**
  * Represents a source document used in the response
@@ -29,14 +35,7 @@ export interface ReasoningStep {
  */
 export type StructuredData = IssueListData | AssigneeBreakdownData;
 
-/**
- * Query context extracted from tool calls for smart history management
- */
-export interface QueryContext {
-  sprint_ids?: number[];
-  status_filters?: string[];
-  assignee_emails?: string[];
-}
+export type { QueryContext };
 
 /**
  * Represents a chat message in the conversation

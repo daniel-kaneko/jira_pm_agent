@@ -1,12 +1,19 @@
 import bcrypt from "bcrypt";
+import { BCRYPT_ROUNDS, SESSION_NAME } from "@/lib/constants";
 
-const BCRYPT_ROUNDS = 12;
+export { SESSION_NAME };
 
-function getSessionSecret(): string {
+/**
+ * Get the session secret from environment variables.
+ */
+export function getSessionSecret(): string {
   return process.env.AUTH_PASSWORD_HASH || process.env.AUTH_PASSWORD || "admin";
 }
 
-function simpleHash(str: string): string {
+/**
+ * Simple hash function for token signing (not cryptographically secure, but fast).
+ */
+export function simpleHash(str: string): string {
   let hash = 0;
   for (let charIndex = 0; charIndex < str.length; charIndex++) {
     const charCode = str.charCodeAt(charIndex);
@@ -59,5 +66,3 @@ export function validateSessionToken(token: string): boolean {
     return false;
   }
 }
-
-export const SESSION_NAME = "jira-pm-session";

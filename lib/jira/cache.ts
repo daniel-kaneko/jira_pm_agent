@@ -9,8 +9,7 @@ import type {
   JiraComponent,
   JiraPriority,
 } from "./types";
-
-const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+import { CACHE_TTL_MS } from "@/lib/constants";
 
 const FIELD_SEARCHES = [
   {

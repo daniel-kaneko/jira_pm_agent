@@ -12,6 +12,7 @@ import {
   CSVUpload,
   ConfirmationCard,
   ProjectSelector,
+  RobotStatus,
 } from "./components/chat";
 import {
   MatrixRain,
@@ -26,6 +27,13 @@ import {
 import { useChat } from "@/hooks/useChat";
 import { useCSV, type CSVRow } from "@/contexts/CSVContext";
 import { useJiraConfig } from "@/contexts/JiraConfigContext";
+import {
+  type AIStatus,
+  checkAIStatus,
+  wakeVM,
+  dispatchVMWaking,
+  dispatchVMRefresh,
+} from "@/lib/utils";
 
 export default function Home() {
   const {
@@ -38,6 +46,7 @@ export default function Home() {
     setConfigId,
     confirmAction,
     cancelAction,
+    clearChat,
   } = useChat();
   const { csvData } = useCSV();
   const { selectedConfig } = useJiraConfig();
@@ -45,6 +54,7 @@ export default function Home() {
   const [theme, setTheme] = useState<Theme>("grey");
   const [effectsEnabled, setEffectsEnabled] = useState(false);
   const [csvUploading, setCsvUploading] = useState(false);
+  const [aiStatus, setAiStatus] = useState<AIStatus>("checking");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
   const userScrolledUp = useRef(false);
@@ -54,6 +64,18 @@ export default function Home() {
       setConfigId(selectedConfig.id);
     }
   }, [selectedConfig, setConfigId]);
+
+  useEffect(() => {
+    checkAIStatus().then(setAiStatus);
+
+    const handleVMRefresh = () => {
+      setAiStatus("ready");
+      clearChat();
+    };
+    window.addEventListener("vm-status-refresh", handleVMRefresh);
+    return () =>
+      window.removeEventListener("vm-status-refresh", handleVMRefresh);
+  }, [clearChat]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as Theme | null;
@@ -102,6 +124,17 @@ export default function Home() {
 
   const handleSubmit = async () => {
     if (!input.trim() || isLoading) return;
+
+    if (aiStatus === "sleeping") {
+      setInput("");
+      setAiStatus("waking");
+      dispatchVMWaking();
+      const success = await wakeVM();
+      setAiStatus(success ? "ready" : "sleeping");
+      if (success) dispatchVMRefresh();
+      return;
+    }
+
     const content = input.trim();
     setInput("");
     userScrolledUp.current = false;
@@ -124,7 +157,7 @@ export default function Home() {
   return (
     <div className="h-screen flex flex-col bg-[var(--bg)] overflow-hidden">
       <Header>
-        <ProjectSelector 
+        <ProjectSelector
           disabled={isLoading || csvUploading || !!pendingAction}
         />
         <ThemeSelector
@@ -160,7 +193,11 @@ export default function Home() {
         </div>
         <div className="max-w-4xl mx-auto px-4 py-4 relative z-10">
           {messages.length === 0 ? (
-            <EmptyState />
+            aiStatus === "ready" ? (
+              <EmptyState />
+            ) : (
+              <RobotStatus status={aiStatus} />
+            )
           ) : (
             <div>
               {messages.map((message, index) => {
@@ -231,7 +268,20 @@ export default function Home() {
         value={input}
         onChange={setInput}
         onSubmit={handleSubmit}
-        isLoading={isLoading || csvUploading || !!pendingAction}
+        isLoading={
+          isLoading ||
+          csvUploading ||
+          !!pendingAction ||
+          aiStatus === "checking" ||
+          aiStatus === "waking"
+        }
+        placeholder={
+          aiStatus === "sleeping"
+            ? "type anything to wake the AI ☕"
+            : aiStatus === "waking"
+            ? "waking up... ☕"
+            : "ask something..."
+        }
         leftActions={
           <CSVUpload
             onUploadComplete={handleCSVUpload}

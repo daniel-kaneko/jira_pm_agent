@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { PREVIEW_COUNT } from "@/lib/constants";
+import { rowsToCsv, downloadCsv } from "@/lib/utils";
+import type { SortDirection } from "../types";
 
 export interface IssueData {
   key: string;
@@ -25,30 +28,18 @@ interface IssueListCardProps {
 }
 
 type SortField = "key" | "summary" | "status" | "assignee" | "points";
-type SortDirection = "asc" | "desc";
 
-const PREVIEW_COUNT = 5;
-
-function exportToCsv(issues: IssueData[], sprintName: string): void {
+function exportIssues(issues: IssueData[], sprintName: string): void {
   const headers = ["Key", "Summary", "Status", "Assignee", "Story Points"];
   const rows = issues.map((issue) => [
     issue.key,
-    `"${issue.summary.replace(/"/g, '""')}"`,
+    issue.summary,
     issue.status,
     issue.assignee || "Unassigned",
-    issue.story_points?.toString() || "",
+    issue.story_points,
   ]);
-
-  const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join(
-    "\n"
-  );
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${sprintName.replace(/\s+/g, "-")}-issues.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  const csv = rowsToCsv(headers, rows);
+  downloadCsv(csv, `${sprintName.replace(/\s+/g, "-")}-issues.csv`);
 }
 
 interface MultiSelectDropdownProps {
@@ -287,7 +278,7 @@ export function IssueListCard({ data }: IssueListCardProps) {
             />
             <button
               onClick={() =>
-                exportToCsv(filteredAndSortedIssues, data.sprint_name)
+                exportIssues(filteredAndSortedIssues, data.sprint_name)
               }
               className="px-3 py-1.5 text-sm bg-[var(--blue)] text-white rounded hover:opacity-90 transition-opacity flex items-center gap-1"
               title="Export to CSV"

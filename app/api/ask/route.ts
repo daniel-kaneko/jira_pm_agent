@@ -9,6 +9,11 @@ import type {
   ChatMessage,
   CSVRow,
 } from "@/lib/types";
+import {
+  MAX_UNIQUE_VALUES_FOR_FILTER,
+  MAX_VALUES_TO_SHOW,
+  WRITE_TOOLS,
+} from "@/lib/constants";
 
 /**
  * Calls a Jira tool via the internal API endpoint, forwarding authentication cookies.
@@ -90,18 +95,18 @@ function condenseForAI(
   if (toolName === "prepare_issues") {
     const data = result as PrepareIssuesResult;
     if (!data.ready_for_creation) return result;
-    const issuesForCreate = data.preview.map((p) => ({
-      summary: p.summary,
-      description: p.description || undefined,
-      assignee: p.assignee || undefined,
-      story_points: p.story_points ?? undefined,
-      sprint_id: p.sprint_id ?? undefined,
-      issue_type: p.issue_type,
-      priority: p.priority || undefined,
-      labels: p.labels?.length ? p.labels : undefined,
-      fix_versions: p.fix_versions?.length ? p.fix_versions : undefined,
-      components: p.components?.length ? p.components : undefined,
-      due_date: p.due_date || undefined,
+    const issuesForCreate = data.preview.map((item) => ({
+      summary: item.summary,
+      description: item.description || undefined,
+      assignee: item.assignee || undefined,
+      story_points: item.story_points ?? undefined,
+      sprint_id: item.sprint_id ?? undefined,
+      issue_type: item.issue_type,
+      priority: item.priority || undefined,
+      labels: item.labels?.length ? item.labels : undefined,
+      fix_versions: item.fix_versions?.length ? item.fix_versions : undefined,
+      components: item.components?.length ? item.components : undefined,
+      due_date: item.due_date || undefined,
     }));
     return `Ready to create ${
       data.preview.length
@@ -329,9 +334,6 @@ interface QueryCSVResult {
     availableFilters?: Record<string, string[]>;
   };
 }
-
-const MAX_UNIQUE_VALUES_FOR_FILTER = 20;
-const MAX_VALUES_TO_SHOW = 10;
 
 function computeAvailableFilters(
   csvData: CSVRow[],
@@ -679,8 +681,6 @@ function handlePrepareIssues(
   };
 }
 
-const WRITE_TOOLS = ["create_issues", "update_issues"];
-
 async function* orchestrate(
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
   cookieHeader: string,
@@ -702,7 +702,19 @@ async function* orchestrate(
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
 
-    const response = await chatWithTools(messages, jiraTools);
+    let response;
+    try {
+      response = await chatWithTools(messages, jiraTools);
+    } catch (chatError) {
+      console.error("[Orchestrate] chatWithTools failed:", chatError);
+      yield {
+        type: "chunk",
+        content: "Sorry, I had trouble connecting to the AI. Please try again.",
+      };
+      yield { type: "done" };
+      return;
+    }
+
     const assistantMessage = response.message;
 
     if (!assistantMessage.tool_calls?.length) {

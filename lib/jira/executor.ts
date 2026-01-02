@@ -6,6 +6,7 @@ import {
   getCachedData,
 } from "./cache";
 import { TOOL_NAMES } from "./tools";
+import { RETRY_DELAY_MS, MAX_RETRIES } from "@/lib/constants";
 import type {
   ToolName,
   ToolResultMap,
@@ -478,9 +479,6 @@ async function moveToSprintIfNeeded(
   return sprint?.name || `Sprint ${sprintId}`;
 }
 
-const RETRY_DELAY_MS = 1000;
-const MAX_RETRIES = 3;
-
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
@@ -559,18 +557,19 @@ async function handleCreateIssues(
     const originalIssue = issues[resultIndex];
 
     if (result.status === "created" && result.key) {
+      const issueKey = result.key;
       const targetSprintId = originalIssue.sprint_id ?? activeSprintId;
       if (targetSprintId) {
         try {
           await withRetry(() =>
-            client.moveIssuesToSprint(targetSprintId, [result.key!])
+            client.moveIssuesToSprint(targetSprintId, [issueKey])
           );
         } catch {}
       }
       if (originalIssue.status && originalIssue.status !== "Backlog") {
         try {
           await withRetry(() =>
-            transitionIfNeeded(config, result.key!, originalIssue.status)
+            transitionIfNeeded(config, issueKey, originalIssue.status)
           );
         } catch {}
       }
@@ -673,10 +672,11 @@ async function handleUpdateIssues(
       }
 
       if (issue.sprint_id) {
+        const sprintId = issue.sprint_id;
         await withRetry(() =>
-          client.moveIssuesToSprint(issue.sprint_id!, [issue.issue_key])
+          client.moveIssuesToSprint(sprintId, [issue.issue_key])
         );
-        changes.push(`sprint → ${issue.sprint_id}`);
+        changes.push(`sprint → ${sprintId}`);
       }
 
       if (issue.status) {
@@ -773,9 +773,9 @@ async function handleGetContext(
   return {
     team_members: cachedData.teamMembers.map((member) => member.name),
     statuses: cachedData.statuses,
-    priorities: cachedData.priorities.map((p) => p.name),
-    versions: cachedData.versions.map((v) => v.name),
-    components: cachedData.components.map((c) => c.name),
+    priorities: cachedData.priorities.map((priority) => priority.name),
+    versions: cachedData.versions.map((version) => version.name),
+    components: cachedData.components.map((component) => component.name),
   };
 }
 

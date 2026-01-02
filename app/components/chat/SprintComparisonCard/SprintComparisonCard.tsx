@@ -2,15 +2,15 @@
 
 import { useState, useMemo } from "react";
 import type { IssueListData, IssueData } from "../IssueListCard";
+import type { SortDirection } from "../types";
+import { PREVIEW_COUNT } from "@/lib/constants";
+import { rowsToCsv, downloadCsv } from "@/lib/utils";
 
 interface SprintComparisonCardProps {
   sprints: IssueListData[];
 }
 
-const PREVIEW_COUNT = 5;
-
 type SortField = "key" | "points";
-type SortDirection = "asc" | "desc";
 
 interface ProcessedSprint {
   sprint_name: string;
@@ -19,40 +19,25 @@ interface ProcessedSprint {
   issues: IssueData[];
 }
 
-function exportToCsv(sprints: ProcessedSprint[]): void {
-  const headers = [
-    "Sprint",
-    "Key",
-    "Summary",
-    "Status",
-    "Assignee",
-    "Story Points",
-  ];
-  const rows: string[][] = [];
+function exportSprints(sprints: ProcessedSprint[]): void {
+  const headers = ["Sprint", "Key", "Summary", "Status", "Assignee", "Story Points"];
+  const rows: (string | number | null)[][] = [];
 
   for (const sprint of sprints) {
     for (const issue of sprint.issues) {
       rows.push([
         sprint.sprint_name,
         issue.key,
-        `"${issue.summary.replace(/"/g, '""')}"`,
+        issue.summary,
         issue.status,
         issue.assignee || "Unassigned",
-        issue.story_points?.toString() || "",
+        issue.story_points,
       ]);
     }
   }
 
-  const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join(
-    "\n"
-  );
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `sprint-comparison-${Date.now()}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  const csv = rowsToCsv(headers, rows);
+  downloadCsv(csv, `sprint-comparison-${Date.now()}.csv`);
 }
 
 interface SprintColumnProps {
@@ -261,7 +246,7 @@ export function SprintComparisonCard({ sprints }: SprintComparisonCardProps) {
                 className="px-2 py-1 text-xs bg-[var(--bg-highlight)] border border-[var(--bg-highlight)] rounded text-[var(--fg)] placeholder:text-[var(--fg-muted)] focus:outline-none focus:border-[var(--blue)] w-32"
               />
               <button
-                onClick={() => exportToCsv(processedSprints)}
+                onClick={() => exportSprints(processedSprints)}
                 className="px-2 py-1 text-xs bg-[var(--blue)] text-white rounded hover:opacity-90 transition-opacity flex items-center gap-1"
                 title="Export to CSV"
               >

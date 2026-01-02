@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-
-const SESSION_NAME = "jira-pm-session";
+import { SESSION_NAME } from "@/lib/auth";
 
 export async function POST(): Promise<NextResponse> {
   const cookieStore = await cookies();

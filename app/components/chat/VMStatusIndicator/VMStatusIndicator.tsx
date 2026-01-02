@@ -1,77 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-
-type VMPowerState = "running" | "deallocated" | "starting" | "stopping" | "unknown";
-
-interface VMStatus {
-  configured: boolean;
-  powerState: VMPowerState;
-  ollamaReady: boolean;
-  error?: string;
-}
-
-type IndicatorColor = "green" | "red" | "yellow" | "gray";
-
-interface StatusDisplay {
-  color: IndicatorColor;
-  label: string;
-}
-
-/**
- * Get display properties based on VM status.
- */
-function getStatusDisplay(status: VMStatus | null, loading: boolean): StatusDisplay {
-  if (loading) {
-    return { color: "gray", label: "Checking..." };
-  }
-
-  if (!status || !status.configured) {
-    return { color: "gray", label: "VM not configured" };
-  }
-
-  if (status.error) {
-    return { color: "red", label: `Error: ${status.error}` };
-  }
-
-  if (status.ollamaReady) {
-    return { color: "green", label: "AI ready" };
-  }
-
-  if (status.powerState === "running") {
-    return { color: "yellow", label: "VM running, AI starting..." };
-  }
-
-  if (status.powerState === "starting") {
-    return { color: "yellow", label: "VM starting..." };
-  }
-
-  if (status.powerState === "deallocated") {
-    return { color: "red", label: "VM stopped" };
-  }
-
-  if (status.powerState === "stopping") {
-    return { color: "yellow", label: "VM stopping..." };
-  }
-
-  return { color: "gray", label: "Unknown status" };
-}
-
-/**
- * Get CSS color variable for indicator.
- */
-function getColorVar(color: IndicatorColor): string {
-  switch (color) {
-    case "green":
-      return "var(--green)";
-    case "red":
-      return "var(--red)";
-    case "yellow":
-      return "var(--yellow)";
-    default:
-      return "var(--fg-muted)";
-  }
-}
+import {
+  type VMStatus,
+  VM_STATUS_REFRESH_EVENT,
+  VM_WAKING_EVENT,
+  getStatusDisplay,
+  getColorVar,
+  fetchVMStatus,
+} from "@/lib/utils";
 
 /**
  * VM Status indicator that shows Ollama/VM availability.
@@ -85,12 +22,12 @@ function getColorVar(color: IndicatorColor): string {
 export function VMStatusIndicator() {
   const [status, setStatus] = useState<VMStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [waking, setWaking] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
-      const response = await fetch("/api/vm/status");
-      const data = await response.json();
+      const data = await fetchVMStatus();
       setStatus(data);
     } catch (error) {
       setStatus({
@@ -106,9 +43,22 @@ export function VMStatusIndicator() {
 
   useEffect(() => {
     fetchStatus();
+
+    const handleRefresh = () => {
+      setWaking(false);
+      fetchStatus();
+    };
+    const handleWaking = () => setWaking(true);
+
+    window.addEventListener(VM_STATUS_REFRESH_EVENT, handleRefresh);
+    window.addEventListener(VM_WAKING_EVENT, handleWaking);
+    return () => {
+      window.removeEventListener(VM_STATUS_REFRESH_EVENT, handleRefresh);
+      window.removeEventListener(VM_WAKING_EVENT, handleWaking);
+    };
   }, [fetchStatus]);
 
-  const display = getStatusDisplay(status, loading);
+  const display = getStatusDisplay(status, loading, waking);
   const colorVar = getColorVar(display.color);
 
   return (

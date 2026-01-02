@@ -89,6 +89,7 @@ async function jiraFetch<T>(
     } catch {
       errorDetails = errorBody.slice(0, 200);
     }
+    console.error(`[JiraFetch] ${response.status} at ${endpoint}`);
     throw new Error(
       `Jira API error: ${response.status} ${response.statusText}${
         errorDetails ? ` - ${errorDetails}` : ""
@@ -592,16 +593,33 @@ export function createJiraClient(config: JiraProjectConfig) {
       }>;
     }> = [];
 
-    let startAt = 0;
+    let nextPageToken: string | undefined;
     const maxResults = 50;
 
     while (true) {
-      const searchData = await jiraFetch<Record<string, unknown>>(
-        `/rest/api/3/search?jql=${encodeURIComponent(
-          jql
-        )}&fields=summary,assignee&maxResults=${maxResults}&startAt=${startAt}`,
-        baseUrl
-      );
+      let searchData: Record<string, unknown>;
+      try {
+        const requestBody: Record<string, unknown> = {
+          jql,
+          fields: ["summary", "assignee"],
+          maxResults,
+        };
+        if (nextPageToken) {
+          requestBody.nextPageToken = nextPageToken;
+        }
+
+        searchData = await jiraFetch<Record<string, unknown>>(
+          `/rest/api/3/search/jql`,
+          baseUrl,
+          {
+            method: "POST",
+            body: JSON.stringify(requestBody),
+          }
+        );
+      } catch (searchErr) {
+        console.error("[Changelog] Search failed with JQL:", jql, searchErr);
+        throw searchErr;
+      }
 
       const issues = (searchData.issues as Array<Record<string, unknown>>) || [];
 
@@ -655,10 +673,10 @@ export function createJiraClient(config: JiraProjectConfig) {
         }
       }
 
-      const total = searchData.total as number;
-      startAt += issues.length;
+      const isLast = searchData.isLast as boolean;
+      nextPageToken = searchData.nextPageToken as string | undefined;
 
-      if (startAt >= total || issues.length === 0) break;
+      if (isLast || issues.length === 0) break;
     }
 
     return allIssues;

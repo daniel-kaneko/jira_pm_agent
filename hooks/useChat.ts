@@ -5,70 +5,15 @@ import {
   Message,
   ReasoningStep,
   StructuredData,
-  QueryContext,
   PendingAction,
 } from "@/app/components/chat";
 import type { StreamEvent, CSVRow } from "@/lib/types";
-
-function formatToolArgValue(val: unknown): string {
-  if (val === null || val === undefined) return String(val);
-  if (typeof val === "object") return JSON.stringify(val);
-  return String(val);
-}
-
-/**
- * Extract filters from a user question using simple pattern matching
- */
-function extractFiltersFromQuestion(question: string): QueryContext {
-  const context: QueryContext = {};
-  const questionLower = question.toLowerCase();
-  
-  const sprintMatch = questionLower.match(/sprint\s*(\d+)/i);
-  if (sprintMatch) {
-    context.sprint_ids = [parseInt(sprintMatch[1])];
-  }
-  
-  const statusFilters: string[] = [];
-  if (/\b(done|completed|concluído)\b/i.test(questionLower))
-    statusFilters.push("done");
-  if (/\b(ui review)\b/i.test(questionLower)) statusFilters.push("ui review");
-  if (/\b(in progress|em progresso)\b/i.test(questionLower))
-    statusFilters.push("in_progress");
-  if (/\b(blocked|bloqueado)\b/i.test(questionLower))
-    statusFilters.push("blocked");
-  if (/\b(in qa)\b/i.test(questionLower)) statusFilters.push("in qa");
-  if (/\b(in uat)\b/i.test(questionLower)) statusFilters.push("in uat");
-  if (/\b(backlog)\b/i.test(questionLower)) statusFilters.push("backlog");
-  if (statusFilters.length > 0) {
-    context.status_filters = statusFilters;
-  }
-  
-  return context;
-}
-
-/**
- * Check if context has changed enough to warrant history reset
- */
-function shouldResetHistory(
-  currentQuestion: string,
-  previousContext: QueryContext | undefined
-): boolean {
-  if (!previousContext) return false;
-  
-  const currentFilters = extractFiltersFromQuestion(currentQuestion);
-  
-  if (
-    currentFilters.status_filters?.length &&
-    previousContext.status_filters?.length
-  ) {
-    const hasCommonStatus = currentFilters.status_filters.some((status) =>
-      previousContext.status_filters?.includes(status)
-    );
-    if (!hasCommonStatus) return true;
-  }
-  
-  return false;
-}
+import {
+  type QueryContext,
+  formatToolArgValue,
+  extractFiltersFromQuestion,
+  shouldResetHistory,
+} from "@/lib/utils";
 
 interface ConfigSession {
   messages: Message[];
@@ -110,15 +55,9 @@ export function useChat() {
 
     if (configId) {
       const savedSession = configSessions.get(configId);
-      if (savedSession) {
-        messagesRef.current = savedSession.messages;
-        csvDataRef.current = savedSession.csvData;
-        setMessages(savedSession.messages);
-      } else {
-        messagesRef.current = [];
-        csvDataRef.current = null;
-        setMessages([]);
-      }
+      messagesRef.current = savedSession?.messages ?? [];
+      csvDataRef.current = savedSession?.csvData ?? null;
+      setMessages(messagesRef.current);
     }
 
     reasoningRef.current = [];
@@ -257,11 +196,12 @@ export function useChat() {
 
               switch (event.type) {
                 case "reasoning":
-                  if (event.content)
+                  if (event.content) {
                     addReasoningStep({
                       type: "thinking",
                       content: event.content,
                     });
+                  }
                   break;
 
                 case "tool_call": {
@@ -381,6 +321,7 @@ export function useChat() {
     queryContextRef.current = undefined;
     csvDataRef.current = null;
     setPendingAction(null);
+    setIsLoading(false);
     
     if (configIdRef.current) {
       configSessions.delete(configIdRef.current);
@@ -549,7 +490,7 @@ export function useChat() {
     reasoningRef.current = updatedReasoning;
 
     const lastAssistantMsg = messagesRef.current
-      .filter((m) => m.role === "assistant")
+      .filter((msg) => msg.role === "assistant")
       .pop();
     if (lastAssistantMsg) {
       const cancelledMessage: Message = {

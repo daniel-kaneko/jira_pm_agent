@@ -38,14 +38,28 @@ async function tryWakeVM(): Promise<boolean> {
 
   try {
     const ready = await wakeVMAndWaitForOllama();
-    if (ready) {
-      vmWakeAttempted = false;
-    }
+    if (ready) vmWakeAttempted = false;
     return ready;
   } catch (error) {
     console.error("[Ollama] Failed to wake VM:", error);
     vmWakeAttempted = false;
     return false;
+  }
+}
+
+/**
+ * Execute a fetch request with automatic VM wake retry on connection failure.
+ */
+async function fetchWithVMRetry(doRequest: () => Promise<Response>): Promise<Response> {
+  try {
+    return await doRequest();
+  } catch (error) {
+    if (!isConnectionError(error)) throw error;
+    
+    const woke = await tryWakeVM();
+    if (!woke) throw new Error("Ollama is not available and VM could not be started");
+    
+    return doRequest();
   }
 }
 
@@ -102,25 +116,11 @@ export async function chatWithTools(
     });
   };
 
-  let response: Response;
-  try {
-    response = await doRequest();
-  } catch (error) {
-    if (isConnectionError(error)) {
-      const woke = await tryWakeVM();
-      if (woke) {
-        response = await doRequest();
-      } else {
-        throw new Error("Ollama is not available and VM could not be started");
-      }
-    } else {
-      throw error;
-    }
-  }
+  const response = await fetchWithVMRetry(doRequest);
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Ollama API error: ${response.status} - ${error}`);
+    const errorText = await response.text();
+    throw new Error(`Ollama API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
@@ -172,25 +172,11 @@ export async function* streamChat(
     });
   };
 
-  let response: Response;
-  try {
-    response = await doRequest();
-  } catch (error) {
-    if (isConnectionError(error)) {
-      const woke = await tryWakeVM();
-      if (woke) {
-        response = await doRequest();
-      } else {
-        throw new Error("Ollama is not available and VM could not be started");
-      }
-    } else {
-      throw error;
-    }
-  }
+  const response = await fetchWithVMRetry(doRequest);
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Ollama API error: ${response.status} - ${error}`);
+    const errorText = await response.text();
+    throw new Error(`Ollama API error: ${response.status} - ${errorText}`);
   }
 
   const reader = response.body?.getReader();

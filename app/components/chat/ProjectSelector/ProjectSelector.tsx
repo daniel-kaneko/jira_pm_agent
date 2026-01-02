@@ -77,11 +77,9 @@ export function ProjectSelector({ onProjectChange, disabled }: ProjectSelectorPr
                   config.id === selectedConfig?.id ? "text-[var(--fg)]" : "text-[var(--fg-dim)]"
                 }`}
               >
-                <span className="text-[var(--accent)]">~</span>
-                <span>{config.name}</span>
-                {config.id === selectedConfig?.id && (
-                  <span className="ml-auto text-[var(--green)]">✓</span>
-                )}
+                <span className="w-3 text-center text-[var(--accent)]">~</span>
+                <span className="flex-1 text-left">{config.name}</span>
+                <span className="w-4 text-right">{config.id === selectedConfig?.id && <span className="text-[var(--green)]">✓</span>}</span>
               </button>
             ))}
           </div>

@@ -66,11 +66,12 @@ export function MessageBubble({
 
     if (isThinking && !message.content) return <TypingIndicator />;
 
-    if (hasStructuredData) {
-      const issueLists = message.structuredData!.filter(
+    if (hasStructuredData && message.structuredData) {
+      const structuredData = message.structuredData;
+      const issueLists = structuredData.filter(
         (data): data is IssueListData => data.type === "issue_list"
       );
-      const assigneeBreakdown = message.structuredData!.find(
+      const assigneeBreakdown = structuredData.find(
         (data): data is AssigneeBreakdownData =>
           data.type === "assignee_breakdown"
       );
@@ -126,20 +127,20 @@ export function MessageBubble({
             {isUser ? "you" : "assistant"}
           </div>
           {renderContent()}
-          {hasReasoning && (
+          {hasReasoning && message.reasoning && (
             <div className="mt-2 pt-2 border-t border-[var(--bg-highlight)]">
               <button
                 onClick={() => setShowReasoning(!showReasoning)}
                 className="text-xs text-[var(--fg-muted)] hover:text-[var(--fg)] mb-1 flex items-center gap-1"
               >
                 <span>{showReasoning ? "▼" : "▶"}</span>
-                <span>reasoning ({message.reasoning!.length} steps)</span>
+                <span>reasoning ({message.reasoning.length} steps)</span>
               </button>
               {showReasoning && (
                 <div className="text-xs font-mono space-y-0.5">
-                  {message.reasoning!.map((step, i) => (
+                  {message.reasoning.map((step, index) => (
                     <div
-                      key={i}
+                      key={index}
                       className={
                         step.type === "tool_call"
                           ? "text-[var(--blue)] opacity-70"

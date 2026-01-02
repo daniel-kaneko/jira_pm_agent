@@ -14,9 +14,10 @@ export { CSVUpload } from "./CSVUpload";
 export { ConfirmationCard } from "./ConfirmationCard";
 export { ProjectSelector } from "./ProjectSelector";
 export { VMStatusIndicator } from "./VMStatusIndicator";
+export { RobotStatus } from "./RobotStatus";
 export type { PendingAction } from "./ConfirmationCard";
 
-export type { Message, Source, ReasoningStep, StructuredData, QueryContext } from "./types";
+export type { Message, Source, ReasoningStep, StructuredData, QueryContext, SortDirection } from "./types";
 export type { CSVUploadProps } from "./CSVUpload";
 export { IssueListCard } from "./IssueListCard";
 export type { IssueListData, IssueData } from "./IssueListCard";

@@ -1,9 +1,6 @@
 "use client";
 
-interface ReasoningStep {
-  type: "thinking" | "tool_call" | "tool_result";
-  content: string;
-}
+import type { ReasoningStep } from "../types";
 
 interface ReasoningDisplayProps {
   steps: ReasoningStep[];

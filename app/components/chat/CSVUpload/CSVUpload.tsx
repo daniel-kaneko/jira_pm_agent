@@ -3,15 +3,7 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useCSV } from "@/contexts/CSVContext";
 import { CSVUploadProps } from "./types";
-
-const VALID_EXTENSIONS = [".csv", ".tsv", ".txt"];
-const VALID_MIME_TYPES = [
-  "text/csv",
-  "text/plain",
-  "text/tab-separated-values",
-  "application/csv",
-  "application/vnd.ms-excel",
-];
+import { CSV_VALID_EXTENSIONS, CSV_VALID_MIME_TYPES } from "@/lib/constants";
 
 interface ValidationError {
   message: string;
@@ -20,14 +12,14 @@ interface ValidationError {
 
 function validateCSVFile(file: File): ValidationError | null {
   const extension = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
-  if (!VALID_EXTENSIONS.includes(extension)) {
+  if (!CSV_VALID_EXTENSIONS.includes(extension)) {
     return {
       message: "Invalid file type",
       details: `Expected .csv file, got ${extension || "no extension"}`,
     };
   }
 
-  if (file.type && !VALID_MIME_TYPES.includes(file.type)) {
+  if (file.type && !CSV_VALID_MIME_TYPES.includes(file.type)) {
     console.warn(`Unexpected MIME type: ${file.type}, proceeding anyway`);
   }
 

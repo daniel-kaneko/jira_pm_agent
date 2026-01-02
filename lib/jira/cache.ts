@@ -38,7 +38,11 @@ const cacheStore = new Map<string, CacheData>();
 
 function isCacheValid(configId: string): boolean {
   const cache = cacheStore.get(configId);
-  return cache !== null && cache !== undefined && Date.now() - cache.lastFetched < CACHE_TTL_MS;
+  return (
+    cache !== null &&
+    cache !== undefined &&
+    Date.now() - cache.lastFetched < CACHE_TTL_MS
+  );
 }
 
 /**
@@ -55,10 +59,7 @@ async function fetchStatusesAndTeam(
   const memberMap = new Map<string, string>();
 
   for (const sprint of sprints) {
-    const issues = await client.getSprintIssues(
-      sprint.id,
-      storyPointsFieldId
-    );
+    const issues = await client.getSprintIssues(sprint.id, storyPointsFieldId);
     for (const issue of issues.issues) {
       if (issue.status) statusSet.add(issue.status);
       if (issue.assignee && issue.assignee_display_name) {
@@ -85,7 +86,9 @@ function findFields(fields: JiraField[]): FieldMappings {
     let fieldId: string | null = null;
 
     for (const pattern of search.patterns) {
-      const match = fields.find((field) => field.custom && pattern.test(field.name));
+      const match = fields.find(
+        (field) => field.custom && pattern.test(field.name)
+      );
       if (match) {
         console.log(`[Cache] Found ${search.key}: ${match.id} - ${match.name}`);
         fieldId = match.id;
@@ -96,7 +99,8 @@ function findFields(fields: JiraField[]): FieldMappings {
     if (!fieldId && search.fallbackIncludes) {
       const fallback = fields.find(
         (field) =>
-          field.custom && field.name.toLowerCase().includes(search.fallbackIncludes)
+          field.custom &&
+          field.name.toLowerCase().includes(search.fallbackIncludes)
       );
       if (fallback) {
         console.log(
@@ -129,13 +133,14 @@ export async function refreshCache(configId: string): Promise<CacheData> {
   const client = createJiraClient(config);
   const boardId = getBoardId(config);
 
-  const [allSprints, fields, versions, components, priorities] = await Promise.all([
-    client.listSprints(boardId, "all", 50),
-    client.getFields(),
-    client.getVersions(config.projectKey),
-    client.getComponents(config.projectKey),
-    client.getPriorities(),
-  ]);
+  const [allSprints, fields, versions, components, priorities] =
+    await Promise.all([
+      client.listSprints(boardId, "all", 50),
+      client.getFields(),
+      client.getVersions(config.projectKey),
+      client.getComponents(config.projectKey),
+      client.getPriorities(),
+    ]);
 
   const fieldMappings = findFields(fields);
   const { statuses, teamMembers } = await fetchStatusesAndTeam(
@@ -161,7 +166,9 @@ export async function refreshCache(configId: string): Promise<CacheData> {
   return cache;
 }
 
-export async function getCachedSprints(configId: string): Promise<JiraSprint[]> {
+export async function getCachedSprints(
+  configId: string
+): Promise<JiraSprint[]> {
   return (await ensureCache(configId)).sprints;
 }
 
@@ -169,19 +176,27 @@ export async function getCachedStatuses(configId: string): Promise<string[]> {
   return (await ensureCache(configId)).statuses;
 }
 
-export async function getCachedTeamMembers(configId: string): Promise<TeamMember[]> {
+export async function getCachedTeamMembers(
+  configId: string
+): Promise<TeamMember[]> {
   return (await ensureCache(configId)).teamMembers;
 }
 
-export async function getCachedVersions(configId: string): Promise<JiraVersion[]> {
+export async function getCachedVersions(
+  configId: string
+): Promise<JiraVersion[]> {
   return (await ensureCache(configId)).versions;
 }
 
-export async function getCachedComponents(configId: string): Promise<JiraComponent[]> {
+export async function getCachedComponents(
+  configId: string
+): Promise<JiraComponent[]> {
   return (await ensureCache(configId)).components;
 }
 
-export async function getCachedPriorities(configId: string): Promise<JiraPriority[]> {
+export async function getCachedPriorities(
+  configId: string
+): Promise<JiraPriority[]> {
   return (await ensureCache(configId)).priorities;
 }
 
@@ -205,9 +220,13 @@ export function getCacheInfo(configId: string): {
 /**
  * Get a custom field ID by key for a specific config.
  */
-export async function getFieldId(configId: string, key: FieldKey): Promise<string | null> {
+export async function getFieldId(
+  configId: string,
+  key: FieldKey
+): Promise<string | null> {
   return (await ensureCache(configId)).fieldMappings[key];
 }
 
-export const getStoryPointsFieldId = (configId: string): Promise<string | null> =>
-  getFieldId(configId, "storyPoints");
+export const getStoryPointsFieldId = (
+  configId: string
+): Promise<string | null> => getFieldId(configId, "storyPoints");

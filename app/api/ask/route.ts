@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { chatWithTools, streamChat } from "@/lib/ollama";
+import { chatWithTools, streamChat, classifyContext } from "@/lib/ollama";
 import { jiraTools } from "@/lib/jira";
 import { generateSystemPrompt, MAX_TOOL_ITERATIONS } from "@/lib/jira/prompts";
 import type {
@@ -8,6 +8,7 @@ import type {
   ToolResponse,
   ChatMessage,
   CSVRow,
+  CachedData,
 } from "@/lib/types";
 import {
   MAX_UNIQUE_VALUES_FOR_FILTER,
@@ -107,6 +108,7 @@ function condenseForAI(
       fix_versions: item.fix_versions?.length ? item.fix_versions : undefined,
       components: item.components?.length ? item.components : undefined,
       due_date: item.due_date || undefined,
+      parent_key: item.parent_key || undefined,
     }));
     return `Ready to create ${
       data.preview.length
@@ -488,6 +490,7 @@ interface PrepareIssuesResult {
     fix_versions: string[] | null;
     components: string[] | null;
     due_date: string | null;
+    parent_key: string | null;
   }>;
   ready_for_creation: boolean;
   errors: string[];
@@ -592,6 +595,7 @@ function handlePrepareIssues(
     | undefined;
   const components = mapping.components as string[] | undefined;
   const dueDate = mapping.due_date as string | undefined;
+  const parentKey = mapping.parent_key as string | undefined;
 
   if (!summaryColumnInput) {
     return {
@@ -668,6 +672,7 @@ function handlePrepareIssues(
         fix_versions: rowFixVersions,
         components: components || null,
         due_date: dueDate || null,
+        parent_key: parentKey || null,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -681,17 +686,262 @@ function handlePrepareIssues(
   };
 }
 
+function summarizeHistory(
+  history: Array<{ role: "user" | "assistant"; content: string }>
+): string {
+  if (history.length <= 1) return "";
+
+  const userMessages = history
+    .filter((m) => m.role === "user")
+    .map((m) => m.content.slice(0, 100));
+
+  const assistantHints = history
+    .filter((m) => m.role === "assistant")
+    .map((m) => {
+      const content = m.content.toLowerCase();
+      if (content.includes("created")) return "created issues";
+      if (content.includes("updated")) return "updated issues";
+      if (content.includes("sprint")) return "discussed sprints";
+      if (content.includes("issue")) return "discussed issues";
+      return "";
+    })
+    .filter(Boolean);
+
+  const parts: string[] = [];
+  if (userMessages.length > 0) {
+    parts.push(`User asked about: ${userMessages.slice(-2).join("; ")}`);
+  }
+  if (assistantHints.length > 0) {
+    parts.push(`Actions: ${[...new Set(assistantHints)].join(", ")}`);
+  }
+
+  return parts.join(". ") || "";
+}
+
+function extractDataContext(
+  history: Array<{ role: "user" | "assistant"; content: string }>
+): string | null {
+  const assistantMessages = history.filter((m) => m.role === "assistant");
+  if (assistantMessages.length === 0) return null;
+
+  const lastAssistant = assistantMessages[assistantMessages.length - 1].content;
+  const dataPoints: string[] = [];
+
+  const sprintMatch = lastAssistant.match(
+    /(?:sprint\s*(?:id[:\s]*)?|ID[:\s]*)(\d{3,5})/i
+  );
+  if (sprintMatch) {
+    dataPoints.push(`Sprint ID: ${sprintMatch[1]}`);
+  }
+
+  const sprintNameMatch = lastAssistant.match(
+    /["']?([A-Z]+-?\w*\s*Sprint\s*\d+)["']?/i
+  );
+  if (sprintNameMatch) {
+    dataPoints.push(`Sprint: ${sprintNameMatch[1]}`);
+  }
+
+  const issueCountMatch = lastAssistant.match(/(\d+)\s*issues?/i);
+  if (issueCountMatch) {
+    dataPoints.push(`${issueCountMatch[1]} issues`);
+  }
+
+  const pointsMatch = lastAssistant.match(/(\d+)\s*(?:story\s*)?points?/i);
+  if (pointsMatch) {
+    dataPoints.push(`${pointsMatch[1]} story points`);
+  }
+
+  const issueKeys = lastAssistant.match(/[A-Z]+-\d+/g);
+  if (issueKeys && issueKeys.length > 0) {
+    const unique = [...new Set(issueKeys)];
+    if (unique.length <= 10) {
+      dataPoints.push(`Issues: ${unique.join(", ")}`);
+    } else {
+      dataPoints.push(
+        `Issues: ${unique.slice(0, 5).join(", ")} and ${unique.length - 5} more`
+      );
+    }
+  }
+
+  if (dataPoints.length === 0) return null;
+
+  return dataPoints.join("; ");
+}
+
+function handleAnalyzeCachedData(
+  cachedData: CachedData | undefined,
+  args: Record<string, unknown>
+): string {
+  if (!cachedData?.issues || cachedData.issues.length === 0) {
+    return "No cached data available. Please fetch issues first using get_sprint_issues.";
+  }
+
+  const operation = args.operation as string | undefined;
+  const field = args.field as string | undefined;
+  const condition = args.condition as
+    | Record<string, number | string>
+    | undefined;
+  const issues = cachedData.issues;
+
+  const matchesCondition = (value: number | string | null): boolean => {
+    if (!condition) return true;
+    if (value === null) return false;
+
+    if (typeof value === "number") {
+      const gt = condition.gt as number | undefined;
+      const gte = condition.gte as number | undefined;
+      const lt = condition.lt as number | undefined;
+      const lte = condition.lte as number | undefined;
+      if (gt !== undefined && value <= gt) return false;
+      if (gte !== undefined && value < gte) return false;
+      if (lt !== undefined && value >= lt) return false;
+      if (lte !== undefined && value > lte) return false;
+    }
+
+    const eq = condition.eq as string | undefined;
+    if (eq !== undefined) {
+      const strValue = String(value).toLowerCase();
+      return strValue === eq.toLowerCase();
+    }
+
+    return true;
+  };
+
+  const getFieldValue = (
+    issue: CachedData["issues"][0]
+  ): number | string | null => {
+    switch (field) {
+      case "story_points":
+        return issue.story_points;
+      case "status":
+        return issue.status;
+      case "assignee":
+        return issue.assignee;
+      default:
+        return null;
+    }
+  };
+
+  switch (operation) {
+    case "count": {
+      const count = issues.filter((issue) =>
+        matchesCondition(getFieldValue(issue))
+      ).length;
+      const conditionStr = condition
+        ? ` matching ${JSON.stringify(condition)}`
+        : "";
+      return `${count} issues${conditionStr} (out of ${issues.length} total)`;
+    }
+
+    case "filter": {
+      const filtered = issues.filter((issue) =>
+        matchesCondition(getFieldValue(issue))
+      );
+      if (filtered.length === 0) {
+        return "No issues match the criteria.";
+      }
+      const issueList = filtered
+        .slice(0, 20)
+        .map(
+          (i) =>
+            `${i.key}: ${i.summary.slice(0, 50)}${
+              i.summary.length > 50 ? "..." : ""
+            } (${i.story_points ?? 0} pts)`
+        )
+        .join("\n");
+      const suffix =
+        filtered.length > 20 ? `\n...and ${filtered.length - 20} more` : "";
+      return `Found ${filtered.length} issues:\n${issueList}${suffix}`;
+    }
+
+    case "sum": {
+      if (field !== "story_points") {
+        return "Sum operation only works with story_points field.";
+      }
+      const total = issues.reduce(
+        (acc, issue) => acc + (issue.story_points ?? 0),
+        0
+      );
+      return `Total story points: ${total} (from ${issues.length} issues)`;
+    }
+
+    case "group": {
+      const groups: Record<string, number> = {};
+      for (const issue of issues) {
+        const value = getFieldValue(issue);
+        const key = value === null ? "Unassigned" : String(value);
+        groups[key] = (groups[key] || 0) + 1;
+      }
+      const sorted = Object.entries(groups).sort((a, b) => b[1] - a[1]);
+      const groupList = sorted
+        .map(([key, count]) => `${key}: ${count}`)
+        .join("\n");
+      return `Grouped by ${field}:\n${groupList}`;
+    }
+
+    default:
+      return "Unknown operation. Use: count, filter, sum, or group.";
+  }
+}
+
 async function* orchestrate(
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
   cookieHeader: string,
   configId: string,
-  csvData?: CSVRow[]
+  csvData?: CSVRow[],
+  cachedData?: CachedData
 ): AsyncGenerator<StreamEvent> {
   const systemPrompt = generateSystemPrompt();
 
+  const currentMessage = conversationHistory[conversationHistory.length - 1];
+  const previousHistory = conversationHistory.slice(0, -1);
+
+  let effectiveHistory = conversationHistory;
+
+  let dataContextHint: string | null = null;
+
+  if (previousHistory.length > 0 && currentMessage?.role === "user") {
+    const summary = summarizeHistory(previousHistory);
+
+    if (summary) {
+      const decision = await classifyContext(currentMessage.content, summary);
+
+      if (decision === "fresh") {
+        yield {
+          type: "reasoning",
+          content: "↻ New task detected, starting fresh",
+        };
+        effectiveHistory = [currentMessage];
+      } else {
+        dataContextHint = extractDataContext(previousHistory);
+        yield {
+          type: "reasoning",
+          content: "→ Continuing previous context",
+        };
+      }
+    }
+  }
+
+  const cachedDataHint = cachedData?.issues?.length
+    ? `[CACHED DATA AVAILABLE: ${cachedData.issues.length} issues${
+        cachedData.sprintName ? ` from ${cachedData.sprintName}` : ""
+      }. Use analyze_cached_data tool for follow-up questions about this data.]`
+    : null;
+
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
-    ...conversationHistory.map((msg) => ({
+    ...(cachedDataHint
+      ? [{ role: "system" as const, content: cachedDataHint }]
+      : []),
+    ...(dataContextHint
+      ? [
+          {
+            role: "system" as const,
+            content: `[AVAILABLE DATA from previous query - use this to answer follow-ups without new API calls: ${dataContextHint}]`,
+          },
+        ]
+      : []),
+    ...effectiveHistory.map((msg) => ({
       role: msg.role as "user" | "assistant",
       content: msg.content,
     })),
@@ -780,6 +1030,7 @@ async function* orchestrate(
             fix_versions: issue.fix_versions as string[] | undefined,
             components: issue.components as string[] | undefined,
             due_date: issue.due_date as string | undefined,
+            parent_key: issue.parent_key as string | undefined,
           })),
         },
       };
@@ -806,6 +1057,8 @@ async function* orchestrate(
         toolResult = handleQueryCSV(csvData, toolArgs);
       } else if (toolName === "prepare_issues") {
         toolResult = handlePrepareIssues(csvData, toolArgs);
+      } else if (toolName === "analyze_cached_data") {
+        toolResult = handleAnalyzeCachedData(cachedData, toolArgs);
       } else {
         toolResult = await callTool(toolName, toolArgs, cookieHeader, configId);
       }
@@ -995,6 +1248,10 @@ function summarizeToolResult(toolName: string, result: unknown): string {
       }
       return msg;
     }
+    case "analyze_cached_data": {
+      const data = result as string;
+      return data.split("\n")[0];
+    }
     default:
       return "Tool executed successfully";
   }
@@ -1031,7 +1288,7 @@ async function* executeDirectAction(
     const result = toolResult as {
       succeeded?: number;
       failed?: number;
-      results?: Array<{ key?: string; summary?: string }>;
+      results?: Array<{ key?: string; summary?: string; error?: string }>;
     };
     const successCount = result.succeeded || 0;
     const failCount = result.failed || 0;
@@ -1050,6 +1307,13 @@ async function* executeDirectAction(
       }
     } else if (failCount > 0) {
       message = `Completed with ${successCount} succeeded, ${failCount} failed.`;
+      if (result.results) {
+        const errors = result.results
+          .filter((r) => r.error)
+          .map((r) => `${r.key || "Unknown"}: ${r.error}`)
+          .join("; ");
+        if (errors) message += ` Errors: ${errors}`;
+      }
     }
 
     yield { type: "chunk", content: message };
@@ -1066,7 +1330,14 @@ async function* executeDirectAction(
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body: AskRequest = await request.json();
-    const { messages, stream = true, csvData, executeAction, configId } = body;
+    const {
+      messages,
+      stream = true,
+      csvData,
+      cachedData,
+      executeAction,
+      configId,
+    } = body;
     const cookieHeader = request.headers.get("cookie") || "";
 
     const { getDefaultConfig } = await import("@/lib/jira");
@@ -1112,7 +1383,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         messages,
         cookieHeader,
         effectiveConfigId,
-        csvData
+        csvData,
+        cachedData
       );
       const sseStream = createSSEStream(generator);
 
@@ -1132,7 +1404,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       messages,
       cookieHeader,
       effectiveConfigId,
-      csvData
+      csvData,
+      cachedData
     )) {
       if (event.type === "chunk" && event.content) {
         finalContent += event.content;

@@ -5,7 +5,6 @@
 
 import type { IssueListData } from "./IssueListCard";
 import type { AssigneeBreakdownData } from "./AssigneeBreakdownCard";
-import type { QueryContext } from "@/lib/utils";
 
 /**
  * Sort direction for table columns
@@ -35,8 +34,6 @@ export interface ReasoningStep {
  */
 export type StructuredData = IssueListData | AssigneeBreakdownData;
 
-export type { QueryContext };
-
 /**
  * Represents a chat message in the conversation
  */
@@ -57,7 +54,5 @@ export interface Message {
   reasoning?: ReasoningStep[];
   /** Structured data to render as components (supports multiple for comparisons) */
   structuredData?: StructuredData[];
-  /** Query context for smart history reset detection */
-  queryContext?: QueryContext;
 }
 

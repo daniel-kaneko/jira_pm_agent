@@ -11,6 +11,7 @@ export const TOOL_NAMES = [
   "get_activity",
   "create_issues",
   "update_issues",
+  "analyze_cached_data",
 ] as const;
 
 export const jiraTools: ToolDefinition[] = [
@@ -135,6 +136,7 @@ Examples:
 - get_sprint_issues(sprint_ids: [9887]) - all issues
 - get_sprint_issues(sprint_ids: [9887], status_filters: ["Concluído"]) - done tasks
 - get_sprint_issues(sprint_ids: [9887], status_filters: ["UI Review"]) - in UI review
+- get_sprint_issues(sprint_ids: [9887], min_story_points: 5) - issues with 5+ points
 - get_sprint_issues(sprint_ids: [9887], include_breakdown: true) - with breakdown chart
 
 Returns: { total_issues, sprints: { "Sprint Name": { issues: [...] } } }`,
@@ -157,6 +159,14 @@ Returns: { total_issues, sprints: { "Sprint Name": { issues: [...] } } }`,
           keyword: {
             type: "string",
             description: "Filter by keyword in summary",
+          },
+          min_story_points: {
+            type: "number",
+            description: "Filter issues with story points >= this value",
+          },
+          max_story_points: {
+            type: "number",
+            description: "Filter issues with story points <= this value",
           },
           include_breakdown: {
             type: "boolean",
@@ -261,7 +271,7 @@ mapping object: { summary_column, description_column, assignee, story_points, sp
           mapping: {
             type: "object",
             description:
-              "Object containing: summary_column, description_column, assignee, story_points, sprint_id, issue_type",
+              "Object containing: summary_column, description_column, assignee, story_points, sprint_id, issue_type, parent_key",
           },
         },
         required: ["mapping"],
@@ -341,6 +351,11 @@ Returns: { total, succeeded, failed, results: [{action, key, summary}] }`,
                   type: "string",
                   description: "Due date in YYYY-MM-DD format",
                 },
+                parent_key: {
+                  type: "string",
+                  description:
+                    "Parent issue key (e.g. 'EPIC-123') to link this story to an epic or parent issue",
+                },
               },
             },
           },
@@ -410,11 +425,62 @@ Returns: { total, succeeded, failed, results: [{action, key, changes}] }`,
                   type: "string",
                   description: "Due date in YYYY-MM-DD format",
                 },
+                parent_key: {
+                  type: "string",
+                  description:
+                    "Parent issue key (e.g. 'EPIC-123') to link this story to an epic or parent issue",
+                },
               },
             },
           },
         },
         required: ["issues"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "analyze_cached_data",
+      description: `Analyze previously fetched issue data WITHOUT making new API calls. Use this for follow-up questions about data already retrieved.
+
+IMPORTANT: Only use this if data was previously fetched in this conversation. For new queries, use get_sprint_issues.
+
+Examples:
+- analyze_cached_data(operation: "count", field: "story_points", condition: { gt: 5 }) - count issues with >5 points
+- analyze_cached_data(operation: "filter", field: "story_points", condition: { gte: 8 }) - list issues with 8+ points
+- analyze_cached_data(operation: "sum", field: "story_points") - total story points
+- analyze_cached_data(operation: "group", field: "assignee") - group by assignee
+- analyze_cached_data(operation: "group", field: "status") - group by status
+
+Returns: Analysis result based on operation`,
+      parameters: {
+        type: "object",
+        properties: {
+          operation: {
+            type: "string",
+            enum: ["count", "filter", "sum", "group"],
+            description:
+              "count: count matching issues, filter: list matching issues, sum: total a numeric field, group: group by field",
+          },
+          field: {
+            type: "string",
+            enum: ["story_points", "status", "assignee"],
+            description: "The field to analyze",
+          },
+          condition: {
+            type: "object",
+            description: "Filter condition (for count/filter operations)",
+            properties: {
+              gt: { type: "number", description: "Greater than" },
+              gte: { type: "number", description: "Greater than or equal" },
+              lt: { type: "number", description: "Less than" },
+              lte: { type: "number", description: "Less than or equal" },
+              eq: { type: "string", description: "Equals (for string fields)" },
+            },
+          },
+        },
+        required: ["operation", "field"],
       },
     },
   },

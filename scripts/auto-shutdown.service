@@ -1,0 +1,14 @@
+[Unit]
+Description=VM Auto-Shutdown Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/home/azureuser/auto-shutdown.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

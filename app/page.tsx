@@ -122,20 +122,61 @@ export default function Home() {
     setCSVData(csvData);
   }, [csvData, setCSVData]);
 
+  const wakeAndSendMessage = async (messageContent: string): Promise<void> => {
+    setInput("");
+    setAiStatus("waking");
+    dispatchVMWaking();
+    const success = await wakeVM();
+    setAiStatus(success ? "ready" : "sleeping");
+    if (success) {
+      dispatchVMRefresh();
+      userScrolledUp.current = false;
+      await sendMessage(messageContent);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!input.trim() || isLoading) return;
 
-    if (aiStatus === "sleeping") {
+    const content = input.trim();
+    const lastMessage = messages[messages.length - 1];
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+
+    if (
+      aiStatus === "ready" &&
+      lastMessage &&
+      lastMessage.timestamp.getTime() >= tenMinutesAgo
+    ) {
       setInput("");
-      setAiStatus("waking");
-      dispatchVMWaking();
-      const success = await wakeVM();
-      setAiStatus(success ? "ready" : "sleeping");
-      if (success) dispatchVMRefresh();
+      userScrolledUp.current = false;
+      await sendMessage(content);
       return;
     }
 
-    const content = input.trim();
+    const shouldCheckHealth =
+      !lastMessage || lastMessage.timestamp.getTime() < tenMinutesAgo;
+
+    if (aiStatus === "sleeping") {
+      await wakeAndSendMessage(content);
+      return;
+    }
+
+    if (shouldCheckHealth) {
+      setInput("");
+      setAiStatus("checking");
+      const currentStatus = await checkAIStatus();
+      if (currentStatus === "sleeping") {
+        await wakeAndSendMessage(content);
+        return;
+      }
+      if (currentStatus === "ready") {
+        setAiStatus("ready");
+        userScrolledUp.current = false;
+        await sendMessage(content);
+        return;
+      }
+    }
+
     setInput("");
     userScrolledUp.current = false;
     await sendMessage(content);
@@ -154,12 +195,25 @@ export default function Home() {
     }
   };
 
+  const inputDisabled =
+    aiStatus === "checking" ||
+    aiStatus === "waking" ||
+    (aiStatus === "ready" && (isLoading || csvUploading || !!pendingAction));
+
+  const attachmentDisabled =
+    isLoading || csvUploading || !!pendingAction || aiStatus !== "ready";
+
+  const inputPlaceholder =
+    aiStatus === "sleeping"
+      ? "type anything to wake up AI ☕"
+      : aiStatus === "waking"
+      ? "waking up... ☕"
+      : "ask something...";
+
   return (
     <div className="h-screen flex flex-col bg-[var(--bg)] overflow-hidden">
       <Header>
-        <ProjectSelector
-          disabled={isLoading || csvUploading || !!pendingAction}
-        />
+        <ProjectSelector disabled={inputDisabled} />
         <ThemeSelector
           currentTheme={theme}
           onThemeChange={handleThemeChange}
@@ -268,24 +322,13 @@ export default function Home() {
         value={input}
         onChange={setInput}
         onSubmit={handleSubmit}
-        isLoading={
-          isLoading ||
-          csvUploading ||
-          !!pendingAction ||
-          aiStatus === "checking" ||
-          aiStatus === "waking"
-        }
-        placeholder={
-          aiStatus === "sleeping"
-            ? "type anything to wake the AI ☕"
-            : aiStatus === "waking"
-            ? "waking up... ☕"
-            : "ask something..."
-        }
+        disabled={inputDisabled}
+        isLoading={isLoading || csvUploading}
+        placeholder={inputPlaceholder}
         leftActions={
           <CSVUpload
             onUploadComplete={handleCSVUpload}
-            disabled={isLoading || !!pendingAction}
+            disabled={attachmentDisabled}
           />
         }
       />

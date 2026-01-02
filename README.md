@@ -53,12 +53,9 @@ Create a `.env.local` file:
 
 ```env
 # Jira Projects Configuration (JSON array - supports multiple projects)
-# Each project needs: id, name, baseUrl, boardId, projectKey
-JIRA_CONFIGS=[{"id":"project1","name":"My Project","baseUrl":"https://your-domain.atlassian.net","boardId":"123","projectKey":"PROJ"}]
-
-# Jira Authentication (shared across all projects)
-JIRA_EMAIL=your-email@company.com
-JIRA_API_TOKEN=your-api-token-here
+# Each project needs: id, name, baseUrl, boardId, projectKey, email, apiToken
+# Each board can have its own authentication credentials
+JIRA_CONFIGS=[{"id":"project1","name":"My Project","baseUrl":"https://your-domain.atlassian.net","boardId":"123","projectKey":"PROJ","email":"your-email@company.com","apiToken":"your-api-token-here"}]
 
 # Authentication (defaults to admin/admin if not set)
 AUTH_USERNAME=your-username
@@ -85,7 +82,7 @@ To find your board ID:
 2. Look at the URL: `https://your-domain.atlassian.net/jira/software/projects/PROJ/boards/123`
 3. The number at the end (123) is your board ID
 
-3. **Start development server**:
+4. **Start development server**:
 
 ```bash
 pnpm dev
@@ -160,21 +157,21 @@ For sprint comparisons, issues are displayed in side-by-side columns with synchr
 
 The chat interface supports multiple themes with optional visual effects:
 
-| Theme     | Effect         |
-| --------- | -------------- |
-| Grey      | -              |
-| Gruvbox   | -              |
-| Nord      | -              |
-| Tokyo Night | -            |
-| Catppuccin | -             |
-| Matrix    | Rain effect    |
-| Christmas | Snow effect    |
-| Space     | Warp effect    |
-| Night Sky | Stars rotation |
-| Synthwave | Grid animation |
-| Ocean     | Wave effect    |
-| Cyberpunk | Neon glow      |
-| Sakura    | Petals falling |
+| Theme       | Effect         |
+| ----------- | -------------- |
+| Grey        | -              |
+| Gruvbox     | -              |
+| Nord        | -              |
+| Tokyo Night | -              |
+| Catppuccin  | -              |
+| Matrix      | Rain effect    |
+| Christmas   | Snow effect    |
+| Space       | Warp effect    |
+| Night Sky   | Stars rotation |
+| Synthwave   | Grid animation |
+| Ocean       | Wave effect    |
+| Cyberpunk   | Neon glow      |
+| Sakura      | Petals falling |
 
 Toggle effects on/off via the theme selector.
 
@@ -265,19 +262,18 @@ vercel
 
 2. **Set environment variables** in Vercel dashboard (Settings → Environment Variables):
 
-| Variable             | Value                                                       |
-| -------------------- | ----------------------------------------------------------- |
-| `JIRA_CONFIGS`       | JSON array of projects (see format below)                   |
-| `JIRA_EMAIL`         | Your Jira email                                             |
-| `JIRA_API_TOKEN`     | Your Jira API token                                         |
-| `AUTH_USERNAME`      | Login username                                              |
-| `AUTH_PASSWORD_HASH` | Bcrypt hash of password                                     |
-| `OLLAMA_BASE_URL`    | `https://ollama.your-domain.com`                            |
-| `OLLAMA_MODEL`       | `qwen2.5:7b` (or other model)                               |
-| `OLLAMA_AUTH_USER`   | Basic auth username (if needed)                             |
-| `OLLAMA_AUTH_PASS`   | Basic auth password (if needed)                             |
+| Variable             | Value                                                  |
+| -------------------- | ------------------------------------------------------ |
+| `JIRA_CONFIGS`       | JSON array of projects with email/apiToken per project |
+| `AUTH_USERNAME`      | Login username                                         |
+| `AUTH_PASSWORD_HASH` | Bcrypt hash of password                                |
+| `OLLAMA_BASE_URL`    | `https://ollama.your-domain.com`                       |
+| `OLLAMA_MODEL`       | `qwen2.5:7b` (or other model)                          |
+| `OLLAMA_AUTH_USER`   | Basic auth username (if needed)                        |
+| `OLLAMA_AUTH_PASS`   | Basic auth password (if needed)                        |
 
 **JIRA_CONFIGS format:**
+
 ```
 [{"id":"proj1","name":"Project 1","baseUrl":"https://your-domain.atlassian.net","boardId":"123","projectKey":"PROJ"}]
 ```

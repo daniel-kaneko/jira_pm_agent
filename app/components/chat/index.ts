@@ -17,7 +17,7 @@ export { VMStatusIndicator } from "./VMStatusIndicator";
 export { RobotStatus } from "./RobotStatus";
 export type { PendingAction } from "./ConfirmationCard";
 
-export type { Message, Source, ReasoningStep, StructuredData, QueryContext, SortDirection } from "./types";
+export type { Message, Source, ReasoningStep, StructuredData, SortDirection } from "./types";
 export type { CSVUploadProps } from "./CSVUpload";
 export { IssueListCard } from "./IssueListCard";
 export type { IssueListData, IssueData } from "./IssueListCard";

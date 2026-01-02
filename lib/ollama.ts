@@ -151,6 +151,60 @@ export async function chatWithTools(
  * @param messages - The conversation messages.
  * @yields Chunks of the response content.
  */
+export type ContextDecision = "continue" | "fresh";
+
+/**
+ * Quick LLM call to classify if the user's message is a continuation or a new task.
+ * Uses a lightweight prompt to minimize latency.
+ * @param currentMessage - The user's current message.
+ * @param previousSummary - Brief summary of what was done before.
+ * @returns "continue" to keep context, "fresh" to start fresh.
+ */
+export async function classifyContext(
+  currentMessage: string,
+  previousSummary: string
+): Promise<ContextDecision> {
+  if (!previousSummary) return "continue";
+
+  const classificationPrompt = `You are classifying user intent. Given the previous context and new message, respond with ONLY "A" or "B":
+A = This is a continuation or follow-up to the previous task
+B = This is a new/different task, unrelated to before
+
+Previous: ${previousSummary}
+New message: "${currentMessage}"
+
+Reply with just A or B:`;
+
+  const doRequest = async (): Promise<Response> => {
+    return fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+      method: "POST",
+      headers: getOllamaHeaders(),
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        prompt: classificationPrompt,
+        stream: false,
+        options: {
+          num_predict: 5,
+          temperature: 0,
+        },
+      }),
+    });
+  };
+
+  try {
+    const response = await fetchWithVMRetry(doRequest);
+    if (!response.ok) return "continue";
+
+    const data = await response.json();
+    const answer = (data.response || "").trim().toUpperCase();
+
+    return answer.startsWith("B") ? "fresh" : "continue";
+  } catch (error) {
+    console.error("[classifyContext] Error:", error);
+    return "continue";
+  }
+}
+
 export async function* streamChat(
   messages: ChatMessage[]
 ): AsyncGenerator<string> {

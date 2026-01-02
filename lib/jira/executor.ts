@@ -126,6 +126,18 @@ const createKeywordFilter =
   (issue) =>
     issue.summary.toLowerCase().includes(keyword.toLowerCase());
 
+const createStoryPointsFilter =
+  <T extends { story_points: number | null }>(
+    min?: number,
+    max?: number
+  ): IssueFilter<T> =>
+  (issue) => {
+    const points = issue.story_points ?? 0;
+    if (min !== undefined && points < min) return false;
+    if (max !== undefined && points > max) return false;
+    return true;
+  };
+
 function applyFilters<T>(
   items: T[],
   filters: Array<IssueFilter<T> | null>
@@ -221,6 +233,8 @@ async function handleGetSprintIssues(
   const assignee_emails = args.assignee_emails as string[] | undefined;
   const status_filters = args.status_filters as string[] | undefined;
   const keyword = args.keyword as string | undefined;
+  const min_story_points = args.min_story_points as number | undefined;
+  const max_story_points = args.max_story_points as number | undefined;
 
   if (!sprint_ids || sprint_ids.length === 0) {
     throw new Error("sprint_ids is required");
@@ -255,6 +269,9 @@ async function handleGetSprintIssues(
         resolvedEmails?.length ? createAssigneeFilter(resolvedEmails) : null,
         status_filters?.length ? createStatusFilter(status_filters) : null,
         keyword ? createKeywordFilter(keyword) : null,
+        min_story_points !== undefined || max_story_points !== undefined
+          ? createStoryPointsFilter(min_story_points, max_story_points)
+          : null,
       ]);
 
       const sortedIssues = filteredIssues.sort((a, b) =>
@@ -302,6 +319,8 @@ async function handleGetSprintIssues(
       assignees: resolvedEmails || null,
       status_filters: status_filters || null,
       keyword: keyword || null,
+      min_story_points: min_story_points ?? null,
+      max_story_points: max_story_points ?? null,
     },
     sprints,
   };
@@ -538,6 +557,7 @@ async function handleCreateIssues(
         fixVersions: issue.fix_versions,
         components: issue.components,
         dueDate: issue.due_date,
+        parentKey: issue.parent_key,
       };
     })
   );
@@ -640,7 +660,8 @@ async function handleUpdateIssues(
         issue.labels ||
         issue.fix_versions ||
         issue.components ||
-        issue.due_date;
+        issue.due_date ||
+        issue.parent_key;
 
       if (hasFieldUpdates) {
         await withRetry(() =>
@@ -656,6 +677,7 @@ async function handleUpdateIssues(
             fixVersions: issue.fix_versions,
             components: issue.components,
             dueDate: issue.due_date,
+            parentKey: issue.parent_key,
           })
         );
 
@@ -669,6 +691,7 @@ async function handleUpdateIssues(
         if (issue.components)
           changes.push(`components → [${issue.components.join(", ")}]`);
         if (issue.due_date) changes.push(`dueDate → ${issue.due_date}`);
+        if (issue.parent_key) changes.push(`parent → ${issue.parent_key}`);
       }
 
       if (issue.sprint_id) {
@@ -692,10 +715,16 @@ async function handleUpdateIssues(
         changes,
       };
     } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+          ? err
+          : "Unknown error";
       return {
         action: "error" as const,
         key: issue.issue_key,
-        error: err instanceof Error ? err.message : "Unknown error",
+        error: errorMessage,
       };
     }
   });

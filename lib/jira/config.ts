@@ -11,7 +11,7 @@ export function getConfigs(): JiraProjectConfig[] {
   if (!configsJson) {
     throw new Error(
       "JIRA_CONFIGS environment variable is required. Example: " +
-        '[{"id":"project1","name":"Project 1","baseUrl":"https://company.atlassian.net","boardId":"123","projectKey":"PROJ"}]'
+        '[{"id":"project1","name":"Project 1","baseUrl":"https://company.atlassian.net","boardId":"123","projectKey":"PROJ","email":"user@example.com","apiToken":"YOUR_API_TOKEN"}]'
     );
   }
 
@@ -23,9 +23,19 @@ export function getConfigs(): JiraProjectConfig[] {
     }
 
     for (const config of configs) {
-      if (!config.id || !config.name || !config.baseUrl || !config.boardId || !config.projectKey) {
+      if (
+        !config.id ||
+        !config.name ||
+        !config.baseUrl ||
+        !config.boardId ||
+        !config.projectKey ||
+        !config.email ||
+        !config.apiToken
+      ) {
         throw new Error(
-          `Invalid config: each project must have id, name, baseUrl, boardId, and projectKey. Got: ${JSON.stringify(config)}`
+          `Invalid config: each project must have id, name, baseUrl, boardId, projectKey, email, and apiToken. Got: ${JSON.stringify(
+            config
+          )}`
         );
       }
     }
@@ -74,4 +84,3 @@ export function getDefaultConfig(): JiraProjectConfig {
 export function getBoardId(config: JiraProjectConfig): number {
   return parseInt(config.boardId, 10);
 }
-

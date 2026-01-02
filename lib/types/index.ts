@@ -5,6 +5,8 @@ export type {
   ExecuteRequest,
   ToolCallInput,
   CSVRow,
+  CachedData,
+  CachedIssue,
   PendingAction,
   ExecuteActionPayload,
 } from "./api";

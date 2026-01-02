@@ -15,8 +15,10 @@ export interface ChatInputProps {
   onChange: (value: string) => void;
   /** Callback when form is submitted */
   onSubmit: () => void;
-  /** Whether the input is in loading state */
-  isLoading: boolean;
+  /** Whether the input is disabled (can't type) */
+  disabled?: boolean;
+  /** Whether the input is in loading state (shows visual indicator) */
+  isLoading?: boolean;
   /** Placeholder text for the input */
   placeholder?: string;
   /** Footer text displayed below the input */

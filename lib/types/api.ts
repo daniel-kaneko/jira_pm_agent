@@ -2,6 +2,20 @@ export interface CSVRow {
   [key: string]: string;
 }
 
+export interface CachedIssue {
+  key: string;
+  summary: string;
+  status: string;
+  assignee: string | null;
+  story_points: number | null;
+}
+
+export interface CachedData {
+  issues: CachedIssue[];
+  sprintId?: number;
+  sprintName?: string;
+}
+
 export interface PendingAction {
   id: string;
   toolName: "create_issues" | "update_issues";
@@ -19,6 +33,7 @@ export interface PendingAction {
     fix_versions?: string[];
     components?: string[];
     due_date?: string;
+    parent_key?: string;
   }>;
 }
 
@@ -31,6 +46,7 @@ export interface AskRequest {
   messages?: Array<{ role: "user" | "assistant"; content: string }>;
   stream?: boolean;
   csvData?: CSVRow[];
+  cachedData?: CachedData;
   executeAction?: ExecuteActionPayload;
   configId?: string;
 }

@@ -113,7 +113,7 @@ export function MessageBubble({
   };
 
   return (
-    <div className="animate-fade-in py-2 border-b border-[var(--bg-highlight)]">
+    <div className="animate-fade-in py-2 border-b border-[var(--bg-highlight)] overflow-hidden">
       <div className="flex gap-3">
         <span
           className={`shrink-0 ${
@@ -122,7 +122,7 @@ export function MessageBubble({
         >
           {isUser ? ">" : "λ"}
         </span>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="text-xs text-[var(--fg-muted)] mb-1">
             {isUser ? "you" : "assistant"}
           </div>
@@ -137,17 +137,17 @@ export function MessageBubble({
                 <span>reasoning ({message.reasoning.length} steps)</span>
               </button>
               {showReasoning && (
-                <div className="text-xs font-mono space-y-0.5">
+                <div className="text-xs font-mono space-y-0.5 overflow-hidden">
                   {message.reasoning.map((step, index) => (
                     <div
                       key={index}
-                      className={
+                      className={`break-all ${
                         step.type === "tool_call"
                           ? "text-[var(--blue)] opacity-70"
                           : step.type === "tool_result"
                           ? "text-[var(--green)] opacity-70"
                           : "text-[var(--fg-muted)] opacity-50 italic"
-                      }
+                      }`}
                     >
                       {step.content}
                     </div>

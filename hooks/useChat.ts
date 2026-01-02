@@ -7,13 +7,9 @@ import {
   StructuredData,
   PendingAction,
 } from "@/app/components/chat";
-import type { StreamEvent, CSVRow } from "@/lib/types";
-import {
-  type QueryContext,
-  formatToolArgValue,
-  extractFiltersFromQuestion,
-  shouldResetHistory,
-} from "@/lib/utils";
+import type { StreamEvent, CSVRow, CachedData, CachedIssue } from "@/lib/types";
+import { formatToolArgValue } from "@/lib/utils";
+import type { IssueListData } from "@/app/components/chat/IssueListCard";
 
 interface ConfigSession {
   messages: Message[];
@@ -32,8 +28,8 @@ export function useChat() {
   const messagesRef = useRef<Message[]>([]);
   const reasoningRef = useRef<ReasoningStep[]>([]);
   const structuredDataRef = useRef<StructuredData[]>([]);
-  const queryContextRef = useRef<QueryContext | undefined>(undefined);
   const csvDataRef = useRef<CSVRow[] | null>(null);
+  const cachedDataRef = useRef<CachedData | null>(null);
   const configIdRef = useRef<string | null>(null);
   const lastMessagesRef = useRef<
     Array<{ role: "user" | "assistant"; content: string }>
@@ -79,32 +75,14 @@ export function useChat() {
 
       const assistantId = crypto.randomUUID();
 
-      const lastAssistantMessage = messagesRef.current
-        .filter((msg) => msg.role === "assistant")
-        .pop();
-      const previousContext = lastAssistantMessage?.queryContext;
-      const resetHistory = shouldResetHistory(content, previousContext);
-
       const updatedMessages = [...messagesRef.current, userMessage];
       messagesRef.current = updatedMessages;
       setMessages(updatedMessages);
       setIsLoading(true);
-      
-      if (resetHistory) {
-        reasoningRef.current = [
-          {
-            type: "thinking",
-            content: "↻ Context changed, starting fresh query",
-          },
-        ];
-        setReasoning(reasoningRef.current);
-      } else {
-        reasoningRef.current = [];
-        setReasoning([]);
-      }
 
+      reasoningRef.current = [];
+      setReasoning([]);
       structuredDataRef.current = [];
-      queryContextRef.current = undefined;
 
       setMessages((prev) => [
         ...prev,
@@ -117,9 +95,7 @@ export function useChat() {
       ]);
 
       try {
-        const recentMessages = resetHistory 
-          ? [userMessage]
-          : updatedMessages.slice(-6);
+        const recentMessages = updatedMessages.slice(-6);
         const historyForApi = recentMessages.map((msg) => ({
           role: msg.role as "user" | "assistant",
           content: msg.apiContent || msg.content,
@@ -131,6 +107,7 @@ export function useChat() {
           messages: typeof historyForApi;
           stream: boolean;
           csvData?: CSVRow[];
+          cachedData?: CachedData;
           configId?: string;
         } = {
           messages: historyForApi,
@@ -139,6 +116,10 @@ export function useChat() {
 
         if (csvDataRef.current) {
           requestBody.csvData = csvDataRef.current;
+        }
+
+        if (cachedDataRef.current) {
+          requestBody.cachedData = cachedDataRef.current;
         }
 
         if (configIdRef.current) {
@@ -208,25 +189,16 @@ export function useChat() {
                   if (!event.tool) break;
                   const argsStr = event.arguments
                     ? ` (${Object.entries(event.arguments)
-                        .map(([key, value]) => `${key}: ${formatToolArgValue(value)}`)
+                        .map(
+                          ([key, value]) =>
+                            `${key}: ${formatToolArgValue(value)}`
+                        )
                         .join(", ")})`
                     : "";
                   addReasoningStep({
                     type: "tool_call",
                     content: `→ ${event.tool}${argsStr}`,
                   });
-                  if (event.tool === "get_sprint_issues" && event.arguments) {
-                    const args = event.arguments as Record<string, unknown>;
-                    queryContextRef.current = {
-                      sprint_ids: args.sprint_ids as number[] | undefined,
-                      status_filters: args.status_filters as
-                        | string[]
-                        | undefined,
-                      assignee_emails: args.assignee_emails as
-                        | string[]
-                        | undefined,
-                    };
-                  }
                   break;
                 }
 
@@ -249,11 +221,33 @@ export function useChat() {
                   break;
 
                 case "structured_data":
-                  if (event.data)
+                  if (event.data) {
                     structuredDataRef.current = [
                       ...structuredDataRef.current,
                       event.data as StructuredData,
                     ];
+                    const data = event.data as Record<string, unknown>;
+                    if (
+                      data.type === "issue_list" &&
+                      Array.isArray(data.issues)
+                    ) {
+                      const issues = data.issues as IssueListData["issues"];
+                      const sprintName = data.sprint_name as string | undefined;
+                      const cachedIssues: CachedIssue[] = issues.map(
+                        (issue) => ({
+                          key: issue.key,
+                          summary: issue.summary,
+                          status: issue.status,
+                          assignee: issue.assignee,
+                          story_points: issue.story_points,
+                        })
+                      );
+                      cachedDataRef.current = {
+                        issues: cachedIssues,
+                        sprintName,
+                      };
+                    }
+                  }
                   break;
 
                 case "confirmation_required":
@@ -280,7 +274,6 @@ export function useChat() {
                       structuredDataRef.current.length > 0
                         ? structuredDataRef.current
                         : undefined,
-                    queryContext: queryContextRef.current,
                   };
                   messagesRef.current = [...messagesRef.current, finalMessage];
                   setMessages((prevMessages) =>
@@ -318,11 +311,11 @@ export function useChat() {
     setReasoning([]);
     reasoningRef.current = [];
     structuredDataRef.current = [];
-    queryContextRef.current = undefined;
     csvDataRef.current = null;
+    cachedDataRef.current = null;
     setPendingAction(null);
     setIsLoading(false);
-    
+
     if (configIdRef.current) {
       configSessions.delete(configIdRef.current);
     }
@@ -408,7 +401,9 @@ export function useChat() {
                 if (!event.tool) break;
                 const argsStr = event.arguments
                   ? ` (${Object.entries(event.arguments)
-                      .map(([key, value]) => `${key}: ${formatToolArgValue(value)}`)
+                      .map(
+                        ([key, value]) => `${key}: ${formatToolArgValue(value)}`
+                      )
                       .join(", ")})`
                   : "";
                 reasoningRef.current = [

@@ -2,19 +2,12 @@
 
 import { useState, useEffect } from "react";
 import {
-  SLEEPING_ROBOT,
-  SLEEPING_ROBOT_2,
-  CHECKING_FRAMES,
   LOADING_MESSAGES,
-  WAKING_FRAMES,
   WAKING_MESSAGES,
   SLEEPING_MESSAGE,
 } from "@/lib/constants";
-import type {
-  RobotStatusType,
-  AnimationConfig,
-  RobotStatusProps,
-} from "./types";
+import { RobotSVG } from "./RobotSVG";
+import type { RobotStatusType, AnimationConfig, RobotStatusProps } from "./types";
 
 const ANIMATION_CONFIG: Record<
   Exclude<RobotStatusType, "ready">,
@@ -23,13 +16,13 @@ const ANIMATION_CONFIG: Record<
   sleeping: { frameMs: 1500, frameCount: 2 },
   checking: {
     frameMs: 400,
-    frameCount: CHECKING_FRAMES.length,
+    frameCount: 3,
     messageMs: 2000,
     messageCount: LOADING_MESSAGES.length,
   },
   waking: {
     frameMs: 500,
-    frameCount: WAKING_FRAMES.length,
+    frameCount: 2,
     messageMs: 2500,
     messageCount: WAKING_MESSAGES.length,
     showTimer: true,
@@ -80,29 +73,21 @@ export function RobotStatus({ status }: RobotStatusProps) {
 
   const config = ANIMATION_CONFIG[status];
 
-  const robotFrames = {
-    sleeping: frame === 0 ? SLEEPING_ROBOT : SLEEPING_ROBOT_2,
-    waking: WAKING_FRAMES[frame % WAKING_FRAMES.length],
-    checking: CHECKING_FRAMES[frame % CHECKING_FRAMES.length],
-  };
-
-  const messages = {
+  const messages: Record<Exclude<RobotStatusType, "ready">, string> = {
     sleeping: SLEEPING_MESSAGE,
     waking: WAKING_MESSAGES[messageIndex % WAKING_MESSAGES.length],
     checking: LOADING_MESSAGES[messageIndex % LOADING_MESSAGES.length],
   };
 
-  const robot = robotFrames[status];
   const message = messages[status];
 
   return (
     <div className="flex flex-col items-center justify-center py-12 animate-fade-in">
-      <pre
-        className="text-[var(--fg-muted)] text-sm sm:text-base font-mono leading-tight select-none"
-        style={{ letterSpacing: "0.02em" }}
-      >
-        {robot}
-      </pre>
+      <RobotSVG
+        status={status}
+        frame={frame}
+        className="w-24 h-24 sm:w-32 sm:h-32 text-[var(--fg-muted)] transition-all duration-300"
+      />
       <p className="mt-6 text-[var(--fg-dim)] text-sm">{message}</p>
       {status === "sleeping" && (
         <p className="mt-3 text-[var(--accent)] text-sm font-medium animate-pulse text-center">

@@ -14,7 +14,8 @@ export function ChatInput({
   value,
   onChange,
   onSubmit,
-  isLoading,
+  disabled = false,
+  isLoading = false,
   placeholder = "ask something...",
   leftActions,
 }: ChatInputProps) {
@@ -23,7 +24,9 @@ export function ChatInput({
   const handleKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key !== "Enter" || e.shiftKey) return;
     e.preventDefault();
-    onSubmit();
+    if (!disabled && value.trim().length > 0) {
+      onSubmit();
+    }
   };
 
   const handleInput = (e: React.FormEvent<HTMLTextAreaElement>): void => {
@@ -32,7 +35,7 @@ export function ChatInput({
     target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
   };
 
-  const canSend = value.trim().length > 0 && !isLoading;
+  const canSend = value.trim().length > 0 && !disabled;
 
   return (
     <footer className="shrink-0 bg-[var(--bg-soft)] border-t border-[var(--bg-highlight)]">
@@ -48,7 +51,7 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             onInput={handleInput}
             placeholder={placeholder}
-            disabled={isLoading}
+            disabled={disabled}
             rows={1}
             className="flex-1 bg-transparent resize-none outline-none text-[var(--fg)] placeholder:text-[var(--fg-muted)] py-2 disabled:opacity-50"
             style={{ minHeight: "24px", height: "auto" }}

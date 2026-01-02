@@ -7,6 +7,8 @@ export interface JiraProjectConfig {
   baseUrl: string;
   boardId: string;
   projectKey: string;
+  email: string;
+  apiToken: string;
 }
 
 export interface JiraIssue {
@@ -79,6 +81,7 @@ export interface CreateIssueParams {
   fixVersions?: string[];
   components?: string[];
   dueDate?: string;
+  parentKey?: string;
   customFields?: Record<string, unknown>;
 }
 
@@ -101,6 +104,7 @@ export interface UpdateIssueParams {
   fixVersions?: string[];
   components?: string[];
   dueDate?: string;
+  parentKey?: string;
   customFields?: Record<string, unknown>;
 }
 
@@ -146,10 +150,12 @@ export interface JiraSprintSummary {
 export interface ToolPropertyDefinition {
   type: string;
   description: string;
+  enum?: string[];
   items?: {
     type: string;
     properties?: Record<string, ToolPropertyDefinition>;
   };
+  properties?: Record<string, ToolPropertyDefinition>;
 }
 
 export interface ToolDefinition {
@@ -217,6 +223,7 @@ export interface IssueToCreate {
   fix_versions?: string[];
   components?: string[];
   due_date?: string;
+  parent_key?: string;
 }
 
 export interface IssueToUpdate {
@@ -232,6 +239,7 @@ export interface IssueToUpdate {
   fix_versions?: string[];
   components?: string[];
   due_date?: string;
+  parent_key?: string;
 }
 
 export interface CreateIssuesArgs {
@@ -274,11 +282,24 @@ export interface PrepareIssuesMapping {
   fix_versions?: string | string[];
   components?: string[];
   due_date?: string;
+  parent_key?: string;
 }
 
 export interface PrepareIssuesArgs {
   row_indices: number[];
   mapping: PrepareIssuesMapping;
+}
+
+export interface AnalyzeCachedDataArgs {
+  operation: "count" | "filter" | "sum" | "group";
+  field: "story_points" | "status" | "assignee";
+  condition?: {
+    gt?: number;
+    gte?: number;
+    lt?: number;
+    lte?: number;
+    eq?: string;
+  };
 }
 
 export type ToolArgsMap = {
@@ -292,6 +313,7 @@ export type ToolArgsMap = {
   get_activity: GetActivityArgs;
   create_issues: CreateIssuesArgs;
   update_issues: UpdateIssuesArgs;
+  analyze_cached_data: AnalyzeCachedDataArgs;
 };
 
 export interface ToolCall<T extends ToolName = ToolName> {
@@ -326,6 +348,7 @@ export type ToolResultMap = {
       fix_versions: string[] | null;
       components: string[] | null;
       due_date: string | null;
+      parent_key?: string;
     }>;
     ready_for_creation: boolean;
     errors: string[];
@@ -350,6 +373,8 @@ export type ToolResultMap = {
       assignees: string[] | null;
       status_filters: string[] | null;
       keyword: string | null;
+      min_story_points: number | null;
+      max_story_points: number | null;
     };
     sprints: Record<
       string,

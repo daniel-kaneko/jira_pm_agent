@@ -298,9 +298,9 @@ export function SprintComparisonCard({ sprints }: SprintComparisonCardProps) {
 
       <div className="overflow-x-auto">
         <div className="flex divide-x divide-[var(--bg-highlight)]">
-          {processedSprints.map((sprint) => (
+          {processedSprints.map((sprint, index) => (
             <SprintColumn
-              key={sprint.sprint_name}
+              key={`${sprint.sprint_name}-${index}`}
               data={sprint}
               isExpanded={isExpanded}
               search={search}

@@ -10,10 +10,20 @@ export type {
   PendingAction,
   ExecuteActionPayload,
   ReviewIssue,
-  ReviewData,
   ReviewResult,
   AppliedFilters,
 } from "./api";
 
 export type { ChatMessage, ToolCall, OllamaResponse } from "./ollama";
+
+export {
+  isIssueData,
+  isIssueListStructuredData,
+  isPendingAction,
+  hasStructuredData,
+  hasConfirmationRequired,
+  safeJsonParse,
+} from "./guards";
+
+export type { IssueListStructuredData } from "./guards";
 

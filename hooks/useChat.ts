@@ -8,8 +8,8 @@ import {
   PendingAction,
 } from "@/app/components/chat";
 import type { StreamEvent, CSVRow, CachedData, CachedIssue } from "@/lib/types";
+import { isIssueListStructuredData, isPendingAction } from "@/lib/types";
 import { formatToolArgValue } from "@/lib/utils";
-import type { IssueListData } from "@/app/components/chat/IssueListCard";
 
 interface ConfigSession {
   messages: Message[];
@@ -31,7 +31,7 @@ export function useChat() {
   const csvDataRef = useRef<CSVRow[] | null>(null);
   const cachedDataRef = useRef<CachedData | null>(null);
   const configIdRef = useRef<string | null>(null);
-  const useReviewerRef = useRef<boolean>(false);
+  const useAuditorRef = useRef<boolean>(false);
   const lastMessagesRef = useRef<
     Array<{ role: "user" | "assistant"; content: string }>
   >([]);
@@ -110,7 +110,7 @@ export function useChat() {
           csvData?: CSVRow[];
           cachedData?: CachedData;
           configId?: string;
-          useReviewer?: boolean;
+          useAuditor?: boolean;
         } = {
           messages: historyForApi,
           stream: true,
@@ -128,10 +128,10 @@ export function useChat() {
           requestBody.configId = configIdRef.current;
         }
 
-        const useReviewer = localStorage.getItem("useReviewer") === "true";
-        useReviewerRef.current = useReviewer;
-        if (useReviewer) {
-          requestBody.useReviewer = true;
+        const useAuditor = localStorage.getItem("useAuditor") === "true";
+        useAuditorRef.current = useAuditor;
+        if (useAuditor) {
+          requestBody.useAuditor = true;
         }
 
         const res = await fetch("/api/ask", {
@@ -238,39 +238,34 @@ export function useChat() {
                   break;
 
                 case "structured_data":
-                  if (event.data) {
+                  if (event.data && isIssueListStructuredData(event.data)) {
                     structuredDataRef.current = [
                       ...structuredDataRef.current,
-                      event.data as StructuredData,
+                      event.data,
                     ];
-                    const data = event.data as Record<string, unknown>;
-                    if (
-                      data.type === "issue_list" &&
-                      Array.isArray(data.issues)
-                    ) {
-                      const issues = data.issues as IssueListData["issues"];
-                      const sprintName = data.sprint_name as string | undefined;
-                      const cachedIssues: CachedIssue[] = issues.map(
-                        (issue) => ({
-                          key: issue.key,
-                          key_link: issue.key_link,
-                          summary: issue.summary,
-                          status: issue.status,
-                          assignee: issue.assignee,
-                          story_points: issue.story_points,
-                        })
-                      );
-                      cachedDataRef.current = {
-                        issues: cachedIssues,
-                        sprintName,
-                      };
-                    }
+                    const cachedIssues: CachedIssue[] = event.data.issues.map(
+                      (issue) => ({
+                        key: issue.key,
+                        key_link: issue.key_link,
+                        summary: issue.summary,
+                        status: issue.status,
+                        assignee: issue.assignee,
+                        story_points: issue.story_points,
+                      })
+                    );
+                    cachedDataRef.current = {
+                      issues: cachedIssues,
+                      sprintName: event.data.sprint_name,
+                    };
                   }
                   break;
 
                 case "confirmation_required":
-                  if (event.pendingAction) {
-                    setPendingAction(event.pendingAction as PendingAction);
+                  if (
+                    event.pendingAction &&
+                    isPendingAction(event.pendingAction)
+                  ) {
+                    setPendingAction(event.pendingAction);
                     addReasoningStep({
                       type: "thinking",
                       content: "⏸ Waiting for confirmation...",
@@ -293,7 +288,7 @@ export function useChat() {
                         ? structuredDataRef.current
                         : undefined,
                   };
-                  const showValidating = useReviewerRef.current;
+                  const showValidating = useAuditorRef.current;
                   const messageWithValidating = showValidating
                     ? {
                         ...finalMessage,
@@ -318,7 +313,7 @@ export function useChat() {
                     event.reason ||
                     (event.pass ? "Data verified" : "Data mismatch detected");
                   const reviewStep: ReasoningStep = {
-                    content: `🔍 Reviewer: ${reviewContent}`,
+                    content: `🔍 Auditor: ${reviewContent}`,
                     type: "review",
                   };
                   setMessages((prevMessages) =>
@@ -340,7 +335,14 @@ export function useChat() {
                   break;
                 }
               }
-            } catch {}
+            } catch (parseError) {
+              if (process.env.NODE_ENV === "development") {
+                console.debug(
+                  "[useChat] Skipped malformed SSE event:",
+                  jsonStr
+                );
+              }
+            }
           }
         }
       } catch (error) {
@@ -511,7 +513,11 @@ export function useChat() {
                 break;
               }
             }
-          } catch {}
+          } catch (parseError) {
+            if (process.env.NODE_ENV === "development") {
+              console.debug("[useChat] Skipped malformed SSE event:", jsonStr);
+            }
+          }
         }
       }
     } catch (error) {

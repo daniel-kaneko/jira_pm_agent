@@ -1,12 +1,5 @@
 import { ToolDefinition } from "./jira/types";
-import type {
-  ChatMessage,
-  OllamaResponse,
-  ToolCall,
-  ReviewData,
-  ReviewIssue,
-  ReviewResult,
-} from "./types";
+import type { ChatMessage, OllamaResponse, ToolCall } from "./types";
 import { isVMConfigured, wakeVMAndWaitForOllama } from "./azure/vm";
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
@@ -98,7 +91,7 @@ function getOllamaHeaders(): HeadersInit {
  * @param body - Request body (model is added automatically).
  * @returns The fetch Response object.
  */
-async function ollamaRequest(
+export async function ollamaRequest(
   endpoint: "/api/chat" | "/api/generate",
   body: Record<string, unknown>
 ): Promise<Response> {
@@ -214,140 +207,6 @@ Reply with just A or B:`;
   } catch (error) {
     console.error("[classifyContext] Error:", error);
     return "continue";
-  }
-}
-
-/**
- * Review an AI response against actual data to catch hallucinations.
- * Uses a simple fact-checking prompt focused on numbers.
- * @param aiResponse - The AI's text response to verify.
- * @param actualData - The real data to compare against.
- * @returns Pass/fail result with optional reason.
- */
-export async function reviewResponse(
-  aiResponse: string,
-  actualData: ReviewData
-): Promise<ReviewResult> {
-  if (!actualData.issues?.length && actualData.issueCount === undefined) {
-    return { pass: true };
-  }
-
-  const issueList =
-    actualData.issues
-      ?.map((i) => {
-        const name = i.assignee?.split("@")[0] || "Unassigned";
-        return `${i.key}: ${name}, ${i.points ?? 0} pts`;
-      })
-      .join("\n") || "none";
-
-  const filters = actualData.appliedFilters;
-  const sprintDisplay =
-    actualData.sprintName || filters?.sprintIds?.join(", ") || "none";
-  const filterInfo = filters
-    ? `FILTERS APPLIED BY AI:
-- Assignees: ${filters.assignees?.join(", ") || "none"}
-- Sprint: ${sprintDisplay}
-- Status: ${filters.statusFilters?.join(", ") || "none"}`
-    : "";
-
-  const userQuestion = actualData.userQuestion
-    ? `USER ASKED: "${actualData.userQuestion}"`
-    : "";
-
-  const reviewPrompt = `Review this AI response. CHECK STATUS FILTER, then data accuracy.
-
-${userQuestion}
-
-${filterInfo}
-
-STEP 1 - CHECK STATUS FILTER ONLY:
-- If user asked about specific issue statuses, assignees, sprints, etc. → All the correct filters MUST have been applied
-
-STEP 2 - CHECK DATA ACCURACY:
-ACTUAL: ${actualData.issueCount} issues, ${actualData.totalPoints} story points
-- AI's stated totals, sums or breakdowns must match these numbers
-- Name variations are OK (e.g., "Daniel" = "Daniel Kaneko", "Jorge" = "Rodrigo Jorge")
-
-AI RESPONSE:
-"${aiResponse}"
-
-Reply "PASS" or "FAIL: brief reason".`;
-
-  const issueCount = actualData.issueCount ?? 0;
-  const totalPoints = actualData.totalPoints ?? 0;
-
-  const buildDetailedBreakdown = (): string => {
-    const lines: string[] = [];
-    lines.push(
-      `Actual data: ${issueCount} issues, ${totalPoints} total story points`
-    );
-
-    if (actualData.issues?.length) {
-      const byAssignee = new Map<string, { count: number; points: number }>();
-      for (const issue of actualData.issues) {
-        const name = issue.assignee?.split("@")[0] || "Unassigned";
-        const current = byAssignee.get(name) || { count: 0, points: 0 };
-        current.count++;
-        current.points += issue.points ?? 0;
-        byAssignee.set(name, current);
-      }
-      const breakdown = Array.from(byAssignee.entries())
-        .sort((a, b) => b[1].points - a[1].points)
-        .map(
-          ([name, data]) => `${name}: ${data.count} tasks, ${data.points} pts`
-        )
-        .join("; ");
-      lines.push(`Breakdown: ${breakdown}`);
-    }
-
-    return lines.join(". ");
-  };
-
-  const summary = `${issueCount} issues, ${totalPoints} pts`;
-
-  try {
-    const response = await ollamaRequest("/api/generate", {
-      prompt: reviewPrompt,
-      stream: false,
-      options: { num_predict: 100, temperature: 0 },
-    });
-    if (!response.ok) {
-      return {
-        pass: true,
-        reason: `Reviewer skipped (API error). ${buildDetailedBreakdown()}`,
-        summary,
-      };
-    }
-
-    const data = await response.json();
-    const answer = (data.response || "").trim();
-
-    if (answer.toUpperCase().startsWith("PASS")) {
-      return {
-        pass: true,
-        reason: `✓ Verified against actual data. ${buildDetailedBreakdown()}`,
-        summary,
-      };
-    }
-
-    const failReason = answer.replace(/^FAIL:?\s*/i, "").trim();
-    const isFilterIssue = /filter|status.*none|missing/i.test(failReason);
-    const failSummary = isFilterIssue ? "Missing filter" : summary;
-
-    return {
-      pass: false,
-      reason: `⚠ ${
-        failReason || "Mismatch detected"
-      }. ${buildDetailedBreakdown()}`,
-      summary: failSummary,
-    };
-  } catch (error) {
-    console.error("[reviewResponse] Error:", error);
-    return {
-      pass: true,
-      reason: `Reviewer skipped (error). ${buildDetailedBreakdown()}`,
-      summary,
-    };
   }
 }
 

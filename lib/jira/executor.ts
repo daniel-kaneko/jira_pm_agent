@@ -6,8 +6,7 @@ import {
   getCachedData,
   getCachedSprints,
 } from "./cache";
-import { TOOL_NAMES } from "./tools";
-import { RETRY_DELAY_MS, MAX_RETRIES } from "@/lib/constants";
+import { TOOL_NAMES, RETRY_DELAY_MS, MAX_RETRIES } from "@/lib/constants";
 import type {
   ToolName,
   ToolResultMap,
@@ -156,12 +155,12 @@ async function handleGetSprintIssues(
   config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<GetSprintIssuesResult> {
-  const sprint_ids = normalizeToArray(
-    args.sprint_ids ?? args.sprint_id
-  ) as number[] | undefined;
-  const assignees = normalizeToArray(
-    args.assignees ?? args.assignee
-  ) as string[] | undefined;
+  const sprint_ids = normalizeToArray(args.sprint_ids ?? args.sprint_id) as
+    | number[]
+    | undefined;
+  const assignees = normalizeToArray(args.assignees ?? args.assignee) as
+    | string[]
+    | undefined;
   const assignee_emails = normalizeToArray(
     args.assignee_emails ?? args.assignee_email
   ) as string[] | undefined;
@@ -518,14 +517,26 @@ async function handleCreateIssues(
           await withRetry(() =>
             client.moveIssuesToSprint(targetSprintId, [issueKey])
           );
-        } catch {}
+        } catch (sprintError) {
+          console.warn(
+            `[createIssues] Failed to move ${issueKey} to sprint ${targetSprintId}:`,
+            sprintError instanceof Error ? sprintError.message : sprintError
+          );
+        }
       }
       if (originalIssue.status && originalIssue.status !== "Backlog") {
         try {
           await withRetry(() =>
             transitionIfNeeded(config, issueKey, originalIssue.status)
           );
-        } catch {}
+        } catch (transitionError) {
+          console.warn(
+            `[createIssues] Failed to transition ${issueKey} to "${originalIssue.status}":`,
+            transitionError instanceof Error
+              ? transitionError.message
+              : transitionError
+          );
+        }
       }
 
       results.push({
@@ -796,5 +807,5 @@ export async function executeJiraTool(
 }
 
 export function isValidToolName(name: string): name is ToolName {
-  return (TOOL_NAMES as readonly string[]).includes(name);
+  return Object.values(TOOL_NAMES).includes(name as ToolName);
 }

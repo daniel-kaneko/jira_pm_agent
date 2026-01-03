@@ -136,8 +136,8 @@ export function ThemeSelector({
   onThemeChange,
   effectsEnabled,
   onEffectsChange,
-  reviewerEnabled,
-  onReviewerChange,
+  auditorEnabled,
+  onAuditorChange,
 }: ThemeSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
@@ -224,11 +224,11 @@ export function ThemeSelector({
             >
               <input
                 type="checkbox"
-                checked={reviewerEnabled}
-                onChange={(e) => onReviewerChange(e.target.checked)}
+                checked={auditorEnabled}
+                onChange={(e) => onAuditorChange(e.target.checked)}
                 className="w-3 h-3 appearance-none rounded-sm border border-[var(--fg-muted)] bg-[var(--bg-highlight)] checked:bg-[var(--yellow)] checked:border-[var(--yellow)] relative checked:after:content-['✓'] checked:after:absolute checked:after:inset-0 checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-[8px] checked:after:text-[var(--bg)] checked:after:font-bold"
               />
-              <span className="text-[var(--fg-dim)]">AI Reviewer (beta)</span>
+              <span className="text-[var(--fg-dim)]">AI Auditors (beta)</span>
             </label>
 
             <div className="border-t border-[var(--bg-highlight)] my-1" />

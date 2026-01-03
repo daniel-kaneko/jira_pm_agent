@@ -32,8 +32,8 @@ export interface ThemeSelectorProps {
   onThemeChange: (theme: Theme) => void;
   effectsEnabled: boolean;
   onEffectsChange: (enabled: boolean) => void;
-  reviewerEnabled: boolean;
-  onReviewerChange: (enabled: boolean) => void;
+  auditorEnabled: boolean;
+  onAuditorChange: (enabled: boolean) => void;
 }
 
 /**

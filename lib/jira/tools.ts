@@ -1,23 +1,11 @@
 import { ToolDefinition } from "./types";
-
-export const TOOL_NAMES = [
-  "list_sprints",
-  "get_context",
-  "query_csv",
-  "prepare_issues",
-  "get_sprint_issues",
-  "get_issue",
-  "get_activity",
-  "create_issues",
-  "update_issues",
-  "analyze_cached_data",
-] as const;
+import { TOOL_NAMES, CACHE_OPERATIONS, ANALYSIS_FIELDS } from "../constants";
 
 export const jiraTools: ToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "list_sprints",
+      name: TOOL_NAMES.LIST_SPRINTS,
       description: `Get available sprints with their IDs. Call this FIRST when user mentions sprints.
 
 Returns: { sprints: [{ id: 9887, name: "Sprint 24", state: "active" }, ...], hint: "..." }
@@ -44,7 +32,7 @@ When user says "sprint 24", find "Sprint 24" in the results and use its id (e.g.
   {
     type: "function",
     function: {
-      name: "get_context",
+      name: TOOL_NAMES.GET_CONTEXT,
       description: `Get team members, statuses, priorities, versions, and components. Call to discover available field options.
 
 Returns: { team_members: [...], statuses: [...], priorities: [...], versions: [...], components: [...] }`,
@@ -58,7 +46,7 @@ Returns: { team_members: [...], statuses: [...], priorities: [...], versions: [.
   {
     type: "function",
     function: {
-      name: "query_csv",
+      name: TOOL_NAMES.QUERY_CSV,
       description: `Query the uploaded CSV file. Use this to EXPLORE data, not for bulk creation.
 
 Examples:
@@ -100,7 +88,7 @@ Returns: { rows: [...], summary: { totalRows, filteredRows } }`,
   {
     type: "function",
     function: {
-      name: "get_sprint_issues",
+      name: TOOL_NAMES.GET_SPRINT_ISSUES,
       description: `Get issues from sprints with filtering.
 
 Examples:
@@ -148,7 +136,7 @@ Returns: { total_issues, sprints: { "Sprint Name": { issues: [...] } } }`,
   {
     type: "function",
     function: {
-      name: "get_issue",
+      name: TOOL_NAMES.GET_ISSUE,
       description: `Get details of a specific issue by key, including comments.
 
 Examples:
@@ -170,7 +158,7 @@ Returns: { key, summary, description, status, assignee, comments: [...] }`,
   {
     type: "function",
     function: {
-      name: "get_activity",
+      name: TOOL_NAMES.GET_ACTIVITY,
       description: `Get status changes for issues in a sprint since a date.
 
 Examples:
@@ -210,7 +198,7 @@ Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, c
   {
     type: "function",
     function: {
-      name: "prepare_issues",
+      name: TOOL_NAMES.PREPARE_ISSUES,
       description: `Prepare issues from CSV for Jira creation.
 
 Examples:
@@ -248,7 +236,7 @@ mapping object: { summary_column, description_column, assignee, story_points, sp
   {
     type: "function",
     function: {
-      name: "create_issues",
+      name: TOOL_NAMES.CREATE_ISSUES,
       description: `Create multiple issues in bulk. Use prepare_issues first when importing from CSV.
 If no sprint_id is specified, issues are automatically added to the ACTIVE sprint.
 
@@ -334,7 +322,7 @@ Returns: { total, succeeded, failed, results: [{action, key, summary}] }`,
   {
     type: "function",
     function: {
-      name: "update_issues",
+      name: TOOL_NAMES.UPDATE_ISSUES,
       description: `Update multiple existing issues in bulk.
 
 Example:
@@ -408,7 +396,7 @@ Returns: { total, succeeded, failed, results: [{action, key, changes}] }`,
   {
     type: "function",
     function: {
-      name: "analyze_cached_data",
+      name: TOOL_NAMES.ANALYZE_CACHED_DATA,
       description: `Analyze previously fetched issue data WITHOUT making new API calls. Use this for follow-up questions about data already retrieved.
 
 IMPORTANT: Only use this if data was previously fetched in this conversation. For new queries, use get_sprint_issues.
@@ -426,13 +414,13 @@ Returns: Analysis result based on operation`,
         properties: {
           operation: {
             type: "string",
-            enum: ["count", "filter", "sum", "group"],
+            enum: Object.values(CACHE_OPERATIONS),
             description:
               "count: count matching issues, filter: list matching issues, sum: total a numeric field, group: group by field",
           },
           field: {
             type: "string",
-            enum: ["story_points", "status", "assignee"],
+            enum: Object.values(ANALYSIS_FIELDS),
             description: "The field to analyze",
           },
           condition: {

@@ -50,7 +50,7 @@ export interface AskRequest {
   cachedData?: CachedData;
   executeAction?: ExecuteActionPayload;
   configId?: string;
-  useReviewer?: boolean;
+  useAuditor?: boolean;
 }
 
 export interface StreamEvent {
@@ -85,6 +85,7 @@ export interface ToolCallInput {
 
 export interface ReviewIssue {
   key: string;
+  summary?: string;
   assignee: string;
   points: number | null;
 }
@@ -93,17 +94,6 @@ export interface AppliedFilters {
   assignees?: string[];
   sprintIds?: number[];
   statusFilters?: string[];
-}
-
-export interface ReviewData {
-  issueCount?: number;
-  totalPoints?: number;
-  sprintName?: string;
-  assignees?: string[];
-  issueKeys?: string[];
-  issues?: ReviewIssue[];
-  userQuestion?: string;
-  appliedFilters?: AppliedFilters;
 }
 
 export interface ReviewResult {

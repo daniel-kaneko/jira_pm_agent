@@ -44,7 +44,7 @@ export interface Message {
   reasoning?: ReasoningStep[];
   /** Structured data to render as components (supports multiple for comparisons) */
   structuredData?: StructuredData[];
-  /** AI reviewer verification result */
+  /** AI auditor verification result */
   reviewResult?: ReviewResult;
 }
 

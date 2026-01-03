@@ -53,7 +53,7 @@ export function ChatContainer() {
   const [effectsEnabled, setEffectsEnabled] = useState(false);
   const [csvUploading, setCsvUploading] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIStatus>("checking");
-  const [useReviewer, setUseReviewer] = useState(false);
+  const [useAuditor, setUseAuditor] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
   const userScrolledUp = useRef(false);
@@ -84,13 +84,13 @@ export function ChatContainer() {
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as Theme | null;
     const savedEffects = localStorage.getItem("effectsEnabled") === "true";
-    const savedReviewer = localStorage.getItem("useReviewer") === "true";
+    const savedAuditor = localStorage.getItem("useAuditor") === "true";
     if (savedTheme) {
       setTheme(savedTheme);
       document.documentElement.setAttribute("data-theme", savedTheme);
     }
     setEffectsEnabled(savedEffects);
-    setUseReviewer(savedReviewer);
+    setUseAuditor(savedAuditor);
   }, []);
 
   const handleThemeChange = (newTheme: Theme) => {
@@ -110,9 +110,9 @@ export function ChatContainer() {
     localStorage.setItem("effectsEnabled", String(enabled));
   };
 
-  const handleReviewerChange = (enabled: boolean) => {
-    setUseReviewer(enabled);
-    localStorage.setItem("useReviewer", String(enabled));
+  const handleAuditorChange = (enabled: boolean) => {
+    setUseAuditor(enabled);
+    localStorage.setItem("useAuditor", String(enabled));
   };
 
   const handleScroll = useCallback(() => {
@@ -224,8 +224,8 @@ export function ChatContainer() {
           onThemeChange={handleThemeChange}
           effectsEnabled={effectsEnabled}
           onEffectsChange={handleEffectsChange}
-          reviewerEnabled={useReviewer}
-          onReviewerChange={handleReviewerChange}
+          auditorEnabled={useAuditor}
+          onAuditorChange={handleAuditorChange}
         />
       </Header>
 

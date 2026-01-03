@@ -171,9 +171,9 @@ export interface ToolDefinition {
   };
 }
 
-import type { TOOL_NAMES } from "./tools";
+import type { ToolName } from "../constants/tools";
 
-export type ToolName = (typeof TOOL_NAMES)[number];
+export type { ToolName };
 
 export interface GetSprintIssuesArgs {
   sprint_ids: number[];

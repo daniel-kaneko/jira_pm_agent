@@ -28,10 +28,10 @@ export function buildAssigneeMap(issues: ReviewIssue[]): {
 }
 
 /**
- * Build a complete facts sheet for the auditor with summary + full data.
+ * Build a facts sheet for the auditor with summary and valid issues.
  * @param issues - Array of issues.
  * @param totalPoints - Total story points.
- * @returns Formatted string with summary and full issue list.
+ * @returns Formatted string optimized for verification.
  */
 export function buildFactsSheet(
   issues: ReviewIssue[],
@@ -50,18 +50,25 @@ export function buildFactsSheet(
 
   const summaryLines = Object.entries(byAssignee)
     .sort((a, b) => b[1].points - a[1].points)
-    .map(([name, data]) => `- ${name}: ${data.count} tasks, ${data.points} pts`);
+    .map(([name, data]) => `${name}: ${data.count} tasks, ${data.points} pts`);
 
-  const issueLines = issues.map((i) => {
-    const name = i.assignee?.split("@")[0] || "Unassigned";
-    const summary = i.summary ? ` "${i.summary}"` : "";
-    return `${i.key}:${summary} ${name}, ${i.points ?? 0} pts`;
-  });
+  const validKeys = issues.map((i) => i.key).join(", ");
 
-  return `SUMMARY:
-- Total: ${issues.length} tasks, ${totalPoints} pts
+  const issueDetails = issues
+    .map((i) => {
+      const name = i.assignee?.split("@")[0] || "Unassigned";
+      const summary = i.summary || "";
+      return `${i.key}: "${summary}" (${name}, ${i.points ?? 0} pts)`;
+    })
+    .join("\n");
+
+  return `NUMBERS:
+Total: ${issues.length} tasks, ${totalPoints} pts
 ${summaryLines.join("\n")}
 
-ALL ISSUES:
-${issueLines.join("\n")}`;
+VALID ISSUES:
+${validKeys}
+
+ISSUE DETAILS:
+${issueDetails}`;
 }

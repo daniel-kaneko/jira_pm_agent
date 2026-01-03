@@ -1,6 +1,18 @@
 import { ollamaRequest } from "../ollama";
 import { AuditorResult, FilterAuditorInput } from "./types";
 
+const TOOL_TYPINGS = `TOOL TYPINGS:
+
+get_sprint_issues(sprint_ids: number[], assignees?: string[], status_filters?: string[], keyword?: string)
+→ Returns: { total_issues, total_story_points, sprints: { [name]: { issues: [{ key, summary, status, assignee, story_points }] } } }
+→ No assignees param = ALL assignees
+→ No status_filters param = ALL statuses
+
+get_activity(since: string, sprint_ids?: number[], assignees?: string[], to_status?: string)
+→ Returns: { period, changes: [{ issue_key, summary, field, from, to, changed_by, changed_at }] }
+→ No assignees param = ALL assignees
+→ No to_status param = ALL status changes`;
+
 /**
  * Auditor that checks if the AI applied correct filters based on user's question.
  * Focused only on filter validation - nothing else.
@@ -24,37 +36,39 @@ export async function filterAuditor(
           .map(([name, email]) => `${name} (${email})`)
           .join(", ")
       : appliedFilters.assignees.join(", ");
-    filterLines.push(`Assignees: ${assignees || "none"}`);
+    filterLines.push(`assignees: [${assignees}]`);
+  } else {
+    filterLines.push("assignees: undefined (returns ALL)");
   }
 
   if (appliedFilters.sprintIds?.length) {
     const sprint = sprintName || `ID ${appliedFilters.sprintIds.join(", ")}`;
-    filterLines.push(`Sprint: ${sprint || "none"}`);
+    filterLines.push(`sprint: ${sprint}`);
+  } else {
+    filterLines.push("sprint: none");
   }
 
   if (appliedFilters.statusFilters?.length) {
     filterLines.push(
-      `Status: ${appliedFilters.statusFilters.join(", ") || "none"}`
+      `status_filters: [${appliedFilters.statusFilters.join(", ")}]`
     );
+  } else {
+    filterLines.push("status_filters: undefined (returns ALL)");
   }
 
-  if (!filterLines.length) {
-    return { pass: true, reason: "No filters applied" };
-  }
-
-  const prompt = `Can this question be answered with these filters?
+  const prompt = `${TOOL_TYPINGS}
 
 Q: "${userQuestion}"
-Filters: ${filterLines.join(", ")}
+Filters used: ${filterLines.join(", ")}
 
-PASS if the filters provide enough data to answer the question.
-FAIL: missing [specific or explicitly mentioned filter needed]`;
+Can the question be answered with these filters?
+Answer: YES or NO: [missing filter]`;
 
   try {
     const response = await ollamaRequest("/api/generate", {
       prompt,
       stream: false,
-      options: { temperature: 0 },
+      options: { num_predict: 40, temperature: 0 },
     });
 
     if (!response.ok) {
@@ -64,11 +78,11 @@ FAIL: missing [specific or explicitly mentioned filter needed]`;
     const data = await response.json();
     const answer = (data.response || "").trim().toUpperCase();
 
-    if (answer.startsWith("PASS")) {
+    if (answer.startsWith("YES")) {
       return { pass: true, reason: "Filters match question" };
     }
 
-    const failReason = answer.replace(/^FAIL:?\s*/i, "").trim();
+    const failReason = answer.replace(/^NO:?\s*/i, "").trim();
     return { pass: false, reason: failReason || "Filter mismatch" };
   } catch (error) {
     console.error("[filterAuditor] Error:", error);

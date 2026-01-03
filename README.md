@@ -20,6 +20,7 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 - 🔄 Smart context management with cached data analysis for follow-ups
 - 🔐 Simple authentication with environment-based credentials
 - 🤖 **Agentic RAG** - AI dynamically retrieves context via tools
+- 🔍 **AI Auditor System** - Specialized auditors verify AI responses for accuracy
 
 ## Tech Stack
 
@@ -133,6 +134,33 @@ When the AI fetches issues (via `get_sprint_issues`), they're cached client-side
 
 **Automatic UI**: When filtering returns issues, the interactive table is automatically displayed - no AI decision needed.
 
+## AI Auditor System
+
+The app includes a "mixture of experts" auditing system that verifies AI responses for accuracy:
+
+| Auditor | Purpose | Checks |
+| ------- | ------- | ------ |
+| **Filter Auditor** | Validates applied filters match the question | Sprint selection, assignee filters, status filters |
+| **Facts Auditor** | Verifies numerical accuracy | Totals, per-person breakdowns, issue validity |
+
+### How It Works
+
+1. **Filter Auditor** runs first - if wrong filters were applied, the data is wrong
+2. **Facts Auditor** runs second - verifies numbers in the AI response against actual data
+3. Fail-fast logic: if filters are wrong, skip facts check (data is already invalid)
+
+### Status Normalization
+
+The system normalizes status names across languages:
+
+| Input | Matches |
+| ----- | ------- |
+| `done`, `completed`, `concluído` | Any "done" status |
+| `in progress`, `em progresso` | Any "in progress" status |
+| `todo`, `backlog`, `ready` | Any "to do" status |
+
+Toggle the auditor on/off via the checkbox in the theme selector.
+
 ## CSV Upload
 
 Upload CSV files to bulk create Jira issues:
@@ -214,16 +242,31 @@ jira-pm-agent/
 ├── hooks/
 │   └── useChat.ts            # Chat state management
 ├── lib/
-│   ├── constants.ts          # App constants
+│   ├── constants/            # App constants
 │   ├── ollama.ts             # Ollama API client
+│   ├── auditors/             # AI response verification
+│   │   ├── index.ts          # Auditor orchestration
+│   │   ├── filterAuditor.ts  # Validates applied filters
+│   │   ├── factsAuditor.ts   # Verifies numbers and facts
+│   │   ├── utils.ts          # Shared utilities
+│   │   └── types.ts          # Auditor types
 │   └── jira/                 # Jira integration
+│       ├── index.ts          # Main exports
 │       ├── client.ts         # Jira API client
-│       ├── tools.ts          # Tool definitions for AI
-│       ├── executor.ts       # Tool execution logic
-│       ├── prompts.ts        # Minimal AI system prompt
 │       ├── cache.ts          # Sprint/status/team caching
-│       └── types.ts          # Jira-specific types
-├── middleware.ts             # Auth middleware
+│       ├── config.ts         # Project configuration
+│       ├── tools.ts          # Tool definitions for AI
+│       ├── prompts.ts        # Minimal AI system prompt
+│       ├── types.ts          # Jira-specific types
+│       ├── executor/         # Tool execution
+│       │   ├── executor.ts   # Main dispatcher
+│       │   ├── filters.ts    # Issue filtering (status normalization)
+│       │   ├── resolvers.ts  # Name/ID resolution
+│       │   └── helpers.ts    # Retry logic, transitions
+│       └── handlers/         # Tool handlers
+│           ├── issues.ts     # get/create/update issues
+│           ├── sprints.ts    # list sprints, activity
+│           └── context.ts    # get context
 ├── docker-compose.yml        # Ollama setup
 └── package.json
 ```

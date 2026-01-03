@@ -57,6 +57,12 @@ const themes: ThemeConfig[] = [
     description: "Clean and familiar light theme 📄",
   },
   {
+    id: "tui",
+    name: "TUI",
+    color: "#808080",
+    description: "Terminal UI · monochrome ▓░",
+  },
+  {
     id: "matrix",
     name: "Matrix",
     color: "#00ff41",

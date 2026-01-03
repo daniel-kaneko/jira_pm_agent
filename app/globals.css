@@ -255,6 +255,222 @@
   --orange: #ffb085;
 }
 
+/* TUI (Terminal User Interface) theme - Monochrome */
+[data-theme="tui"] {
+  --bg-hard: #000000;
+  --bg: #000000;
+  --bg-soft: #0a0a0a;
+  --bg-highlight: #1a1a1a;
+  --fg: #c0c0c0;
+  --fg-dim: #909090;
+  --fg-muted: #505050;
+  --accent: #ffffff;
+  --green: #e0e0e0;
+  --yellow: #ffffff;
+  --blue: #a0a0a0;
+  --red: #ffffff;
+  --orange: #b0b0b0;
+  --tui-border: #404040;
+}
+
+/* TUI theme specific styles */
+[data-theme="tui"] {
+  font-variant-ligatures: none;
+}
+
+[data-theme="tui"] .border,
+[data-theme="tui"] [class*="border-"] {
+  border-color: var(--tui-border) !important;
+  border-style: solid !important;
+}
+
+[data-theme="tui"] .rounded,
+[data-theme="tui"] .rounded-lg,
+[data-theme="tui"] .rounded-full,
+[data-theme="tui"] [class*="rounded-"] {
+  border-radius: 0 !important;
+}
+
+/* TUI card styling with box characters */
+[data-theme="tui"] .border.rounded-lg,
+[data-theme="tui"] .border-\[var\(--bg-highlight\)\].rounded-lg {
+  position: relative;
+  border: none !important;
+  background: transparent !important;
+}
+
+[data-theme="tui"] .border.rounded-lg::before,
+[data-theme="tui"] .border-\[var\(--bg-highlight\)\].rounded-lg::before {
+  content: "┌" attr(data-tui-title, "") "─";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  color: var(--tui-border);
+  font-size: inherit;
+}
+
+/* TUI scrollbar */
+[data-theme="tui"] ::-webkit-scrollbar {
+  width: 12px;
+  background: #000;
+}
+
+[data-theme="tui"] ::-webkit-scrollbar-track {
+  background: #000;
+  border-left: 1px solid var(--tui-border);
+}
+
+[data-theme="tui"] ::-webkit-scrollbar-thumb {
+  background: var(--tui-border);
+  border: 2px solid #000;
+}
+
+[data-theme="tui"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--green);
+}
+
+/* TUI input styling */
+[data-theme="tui"] input[type="text"],
+[data-theme="tui"] textarea {
+  background: #000 !important;
+  border: 1px solid var(--tui-border) !important;
+  border-radius: 0 !important;
+  caret-color: var(--fg);
+  padding-left: 0.75rem !important;
+}
+
+[data-theme="tui"] input[type="text"]:focus,
+[data-theme="tui"] textarea:focus {
+  border-color: var(--fg-dim) !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* TUI checkbox styling */
+[data-theme="tui"] input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #000 !important;
+  border: 1px solid var(--tui-border) !important;
+  border-radius: 0 !important;
+  cursor: pointer;
+  position: relative;
+}
+
+[data-theme="tui"] input[type="checkbox"]:checked {
+  background: #000 !important;
+  border-color: var(--fg) !important;
+}
+
+[data-theme="tui"] input[type="checkbox"]:checked::after {
+  content: "×";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1;
+}
+
+[data-theme="tui"] input[type="checkbox"]:hover {
+  border-color: var(--fg-dim) !important;
+}
+
+/* TUI button styling */
+[data-theme="tui"] button {
+  border-radius: 0 !important;
+}
+
+[data-theme="tui"] button:not(:disabled):hover {
+  text-shadow: 0 0 8px var(--green);
+}
+
+/* TUI selection */
+[data-theme="tui"] ::selection {
+  background: var(--green);
+  color: #000;
+}
+
+/* TUI progress bars - make them use block characters visually */
+[data-theme="tui"] .bg-\[var\(--bg-highlight\)\].rounded-full {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--bg-highlight) 0px,
+    var(--bg-highlight) 8px,
+    transparent 8px,
+    transparent 10px
+  ) !important;
+  border-radius: 0 !important;
+}
+
+[data-theme="tui"] .bg-\[var\(--green\)\].rounded-full,
+[data-theme="tui"] .bg-\[var\(--blue\)\].rounded-full {
+  border-radius: 0 !important;
+  background: repeating-linear-gradient(
+    90deg,
+    currentColor 0px,
+    currentColor 8px,
+    transparent 8px,
+    transparent 10px
+  ) !important;
+}
+
+/* TUI glow effect on key elements */
+[data-theme="tui"] .text-\[var\(--green\)\],
+[data-theme="tui"] .text-\[var\(--blue\)\] {
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+/* TUI header styling */
+[data-theme="tui"] header {
+  border-bottom: 1px solid var(--tui-border) !important;
+}
+
+/* TUI code blocks */
+[data-theme="tui"] .prose-chat pre {
+  border: 1px solid var(--tui-border);
+  border-left: 1px solid var(--tui-border);
+  border-radius: 0;
+}
+
+[data-theme="tui"] .prose-chat code {
+  border-radius: 0;
+  border: 1px solid var(--tui-border);
+}
+
+/* TUI table styling */
+[data-theme="tui"] .prose-chat th,
+[data-theme="tui"] .prose-chat td {
+  border-color: var(--tui-border);
+}
+
+/* TUI dropdown menus */
+[data-theme="tui"] .bg-\[var\(--bg-soft\)\] {
+  border: 1px solid var(--tui-border) !important;
+}
+
+/* Scanline effect for extra retro feel (optional, subtle) */
+[data-theme="tui"] body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.1) 0px,
+    rgba(0, 0, 0, 0.1) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  z-index: 9999;
+}
+
 * {
   box-sizing: border-box;
 }

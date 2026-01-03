@@ -21,7 +21,8 @@ export type Theme =
   | "synthwave"
   | "ocean"
   | "cyberpunk"
-  | "sakura";
+  | "sakura"
+  | "tui";
 
 /**
  * Props for the ThemeSelector component

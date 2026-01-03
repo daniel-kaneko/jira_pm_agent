@@ -2,13 +2,12 @@
 
 import React, { useMemo } from "react";
 import type { PendingAction } from "@/lib/types/api";
+import { useChatContext } from "@/app/contexts";
 
 export type { PendingAction };
 
 interface ConfirmationCardProps {
   action: PendingAction;
-  onConfirm: () => void;
-  onCancel: () => void;
 }
 
 type IssueField = keyof PendingAction["issues"][0];
@@ -75,11 +74,8 @@ function hasValue(value: unknown): boolean {
   return true;
 }
 
-export function ConfirmationCard({
-  action,
-  onConfirm,
-  onCancel,
-}: ConfirmationCardProps) {
+export function ConfirmationCard({ action }: ConfirmationCardProps) {
+  const { confirmAction, cancelAction } = useChatContext();
   const isCreate = action.toolName === "create_issues";
   const issueCount = action.issues.length;
   const isLargeBatch = issueCount > 10;
@@ -204,10 +200,10 @@ export function ConfirmationCard({
           {action.issues.length !== 1 ? "s" : ""}?
         </span>
         <div className="card-actions">
-          <button className="btn btn-cancel" onClick={onCancel}>
+          <button className="btn btn-cancel" onClick={cancelAction}>
             Cancel
           </button>
-          <button className="btn btn-confirm" onClick={onConfirm}>
+          <button className="btn btn-confirm" onClick={confirmAction}>
             Confirm
           </button>
         </div>

@@ -4,6 +4,7 @@ export interface CSVRow {
 
 export interface CachedIssue {
   key: string;
+  key_link: string;
   summary: string;
   status: string;
   assignee: string | null;
@@ -49,15 +50,19 @@ export interface AskRequest {
   cachedData?: CachedData;
   executeAction?: ExecuteActionPayload;
   configId?: string;
+  useReviewer?: boolean;
 }
 
 export interface StreamEvent {
-  type: "reasoning" | "tool_call" | "tool_result" | "chunk" | "error" | "done" | "structured_data" | "confirmation_required";
+  type: "reasoning" | "tool_call" | "tool_result" | "chunk" | "error" | "done" | "structured_data" | "confirmation_required" | "warning" | "review_complete";
   content?: string;
   tool?: string;
   arguments?: Record<string, unknown>;
   data?: unknown;
   pendingAction?: PendingAction;
+  pass?: boolean;
+  reason?: string;
+  summary?: string;
 }
 
 export interface ToolResponse {
@@ -76,5 +81,35 @@ export interface ExecuteRequest {
 export interface ToolCallInput {
   name: string;
   arguments: Record<string, unknown>;
+}
+
+export interface ReviewIssue {
+  key: string;
+  assignee: string;
+  points: number | null;
+}
+
+export interface AppliedFilters {
+  assignees?: string[];
+  sprintIds?: number[];
+  statusFilters?: string[];
+}
+
+export interface ReviewData {
+  issueCount?: number;
+  totalPoints?: number;
+  sprintName?: string;
+  assignees?: string[];
+  issueKeys?: string[];
+  issues?: ReviewIssue[];
+  userQuestion?: string;
+  appliedFilters?: AppliedFilters;
+}
+
+export interface ReviewResult {
+  pass: boolean;
+  reason?: string;
+  summary?: string;
+  validating?: boolean;
 }
 

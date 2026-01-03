@@ -4,7 +4,7 @@
  */
 
 import type { IssueListData } from "./IssueListCard";
-import type { AssigneeBreakdownData } from "./AssigneeBreakdownCard";
+import type { ReviewResult } from "@/lib/types";
 
 /**
  * Sort direction for table columns
@@ -12,27 +12,19 @@ import type { AssigneeBreakdownData } from "./AssigneeBreakdownCard";
 export type SortDirection = "asc" | "desc";
 
 /**
- * Represents a source document used in the response
- */
-export interface Source {
-  /** Display name of the source */
-  name: string;
-  /** URL to the source documentation */
-  url: string;
-}
-
-/**
  * Represents a reasoning step during tool execution
  */
 export interface ReasoningStep {
-  type: "thinking" | "tool_call" | "tool_result";
+  type: "thinking" | "tool_call" | "tool_result" | "warning" | "review";
   content: string;
 }
 
 /**
  * Structured data types that can be rendered as components
  */
-export type StructuredData = IssueListData | AssigneeBreakdownData;
+export type StructuredData = IssueListData;
+
+export type { ReviewResult };
 
 /**
  * Represents a chat message in the conversation
@@ -48,11 +40,11 @@ export interface Message {
   apiContent?: string;
   /** Timestamp when the message was created */
   timestamp: Date;
-  /** Sources used for assistant responses */
-  sources?: Source[];
   /** Reasoning steps (tool calls) for debugging */
   reasoning?: ReasoningStep[];
   /** Structured data to render as components (supports multiple for comparisons) */
   structuredData?: StructuredData[];
+  /** AI reviewer verification result */
+  reviewResult?: ReviewResult;
 }
 

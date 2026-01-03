@@ -1,5 +1,10 @@
 import { NextRequest } from "next/server";
-import { chatWithTools, streamChat, classifyContext } from "@/lib/ollama";
+import {
+  chatWithTools,
+  streamChat,
+  classifyContext,
+  reviewResponse,
+} from "@/lib/ollama";
 import { jiraTools } from "@/lib/jira";
 import { generateSystemPrompt, MAX_TOOL_ITERATIONS } from "@/lib/jira/prompts";
 import type {
@@ -9,6 +14,7 @@ import type {
   ChatMessage,
   CSVRow,
   CachedData,
+  ReviewData,
 } from "@/lib/types";
 import {
   MAX_UNIQUE_VALUES_FOR_FILTER,
@@ -117,6 +123,18 @@ function condenseForAI(
     })}`;
   }
 
+  if (toolName === "analyze_cached_data") {
+    const data = result as AnalyzeCachedDataResult;
+    if (data.issues && data.issues.length > 0) {
+      const points = data.issues.reduce(
+        (sum, i) => sum + (i.story_points ?? 0),
+        0
+      );
+      return `RESULT: ${data.issues.length} issues (${points} story points). UI DISPLAYS THE LIST - do NOT list issue names/summaries in your response.`;
+    }
+    return data.message;
+  }
+
   if (toolName !== "get_sprint_issues") return result;
 
   const data = result as SprintIssuesResult;
@@ -173,22 +191,157 @@ function condenseForAI(
     }
   }
 
-  output += `\nTASK SUMMARIES (for theme analysis):\n`;
-  for (const [sprintName, sprintData] of sprintEntries) {
-    if (sprintEntries.length > 1) {
-      output += `[${sprintName}]\n`;
-    }
-    for (const issue of sprintData.issues.slice(0, 50)) {
-      output += `- ${issue.summary}\n`;
-    }
-    if (sprintData.issues.length > 50) {
-      output += `... and ${sprintData.issues.length - 50} more\n`;
+  const allIssues = sprintEntries.flatMap(([, s]) => s.issues);
+  const topics = extractTopics(allIssues.map((i) => i.summary));
+  if (topics.length > 0) {
+    output += `\nTOP TOPICS (by frequency):\n`;
+    for (const topic of topics.slice(0, 8)) {
+      output += `- "${topic.phrase}" (${topic.count} issues)\n`;
     }
   }
 
-  output += `\nNOTE: Issue list shown in UI component. Use EXACT numbers from above.`;
+  const statusCounts = new Map<string, number>();
+  for (const issue of allIssues) {
+    statusCounts.set(issue.status, (statusCounts.get(issue.status) || 0) + 1);
+  }
+  output += `\nSTATUS BREAKDOWN:\n`;
+  for (const [status, count] of [...statusCounts.entries()].sort(
+    (a, b) => b[1] - a[1]
+  )) {
+    output += `- ${status}: ${count}\n`;
+  }
+
+  output += `\nUI DISPLAYS FULL ISSUE LIST - do NOT list issue names/summaries in your response. Reference topics/assignees/statuses above for analysis.`;
 
   return output;
+}
+
+function extractTopics(
+  summaries: string[]
+): Array<{ phrase: string; count: number }> {
+  const stopWords = new Set([
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "as",
+    "is",
+    "was",
+    "are",
+    "were",
+    "been",
+    "be",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "can",
+    "need",
+    "this",
+    "that",
+    "these",
+    "those",
+    "i",
+    "you",
+    "he",
+    "she",
+    "it",
+    "we",
+    "they",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "where",
+    "when",
+    "why",
+    "how",
+    "all",
+    "each",
+    "every",
+    "both",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "no",
+    "nor",
+    "not",
+    "only",
+    "own",
+    "same",
+    "so",
+    "than",
+    "too",
+    "very",
+    "just",
+    "also",
+    "now",
+    "new",
+    "first",
+    "last",
+    "get",
+    "set",
+    "add",
+    "update",
+    "fix",
+    "create",
+    "delete",
+    "remove",
+    "dev",
+    "spike",
+  ]);
+
+  const phraseCounts = new Map<string, number>();
+
+  for (const summary of summaries) {
+    const cleaned = summary
+      .replace(/[\[\](){}]/g, " ")
+      .replace(/[^a-zA-Z0-9\s-]/g, "")
+      .toLowerCase();
+
+    const words = cleaned.split(/\s+/).filter((w) => w.length > 2);
+
+    for (let i = 0; i < words.length - 1; i++) {
+      if (stopWords.has(words[i]) || stopWords.has(words[i + 1])) continue;
+      const bigram = `${words[i]} ${words[i + 1]}`;
+      phraseCounts.set(bigram, (phraseCounts.get(bigram) || 0) + 1);
+    }
+
+    for (let i = 0; i < words.length - 2; i++) {
+      if (stopWords.has(words[i]) || stopWords.has(words[i + 2])) continue;
+      const trigram = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
+      phraseCounts.set(trigram, (phraseCounts.get(trigram) || 0) + 1);
+    }
+  }
+
+  return [...phraseCounts.entries()]
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .map(([phrase, count]) => ({ phrase, count }));
 }
 
 interface IssueListStructuredData {
@@ -200,41 +353,51 @@ interface IssueListStructuredData {
   issues: IssueData[];
 }
 
-interface AssigneeStats {
-  name: string;
-  email: string;
-  points: number;
-  tasks: number;
-}
-
-interface AssigneeBreakdownStructuredData {
-  type: "assignee_breakdown";
-  sprint_name: string;
-  total_points: number;
-  total_tasks: number;
-  assignees: AssigneeStats[];
-}
-
-type StructuredDataItem =
-  | IssueListStructuredData
-  | AssigneeBreakdownStructuredData;
+type StructuredDataItem = IssueListStructuredData;
 
 function extractStructuredData(
   toolName: string,
   result: unknown,
   toolArgs: Record<string, unknown> = {}
 ): StructuredDataItem[] {
-  if (toolName !== "get_sprint_issues") return [];
+  if (toolName === "get_sprint_issues") {
+    return extractFromSprintIssues(result);
+  }
 
-  const includeBreakdown = toolArgs.include_breakdown === true;
+  if (toolName === "analyze_cached_data") {
+    return extractFromAnalyzeCachedData(result);
+  }
 
+  return [];
+}
+
+function extractFromAnalyzeCachedData(result: unknown): StructuredDataItem[] {
+  const data = result as AnalyzeCachedDataResult;
+  if (!data.issues || data.issues.length === 0) {
+    return [];
+  }
+
+  const storyPoints = data.issues.reduce(
+    (sum, issue) => sum + (issue.story_points ?? 0),
+    0
+  );
+
+  return [
+    {
+      type: "issue_list" as const,
+      summary: `${data.issues.length} issues (${storyPoints} story points)`,
+      total_issues: data.issues.length,
+      total_story_points: storyPoints,
+      sprint_name: "Filtered Results",
+      issues: data.issues,
+    },
+  ];
+}
+
+function extractFromSprintIssues(result: unknown): StructuredDataItem[] {
   const data = result as SprintIssuesResult;
   const sprintEntries = Object.entries(data.sprints);
   const structuredItems: StructuredDataItem[] = [];
-
-  const allAssigneeStats = new Map<string, AssigneeStats>();
-  let totalPoints = 0;
-  let totalTasks = 0;
 
   for (const [sprintName, sprintData] of sprintEntries) {
     const storyPoints = sprintData.issues.reduce(
@@ -249,49 +412,6 @@ function extractStructuredData(
       total_story_points: storyPoints,
       sprint_name: sprintName,
       issues: sprintData.issues,
-    });
-
-    for (const issue of sprintData.issues) {
-      const email = issue.assignee || "unassigned";
-      const name =
-        email === "unassigned"
-          ? "Unassigned"
-          : email
-              .split("@")[0]
-              .split(".")
-              .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-              .join(" ");
-
-      const current = allAssigneeStats.get(email) || {
-        name,
-        email,
-        points: 0,
-        tasks: 0,
-      };
-      allAssigneeStats.set(email, {
-        name,
-        email,
-        points: current.points + (issue.story_points ?? 0),
-        tasks: current.tasks + 1,
-      });
-
-      totalPoints += issue.story_points ?? 0;
-      totalTasks += 1;
-    }
-  }
-
-  if (includeBreakdown) {
-    const sortedAssignees = [...allAssigneeStats.values()].sort(
-      (a, b) => b.points - a.points
-    );
-    const sprintNames = sprintEntries.map(([name]) => name).join(", ");
-
-    structuredItems.push({
-      type: "assignee_breakdown" as const,
-      sprint_name: sprintNames,
-      total_points: totalPoints,
-      total_tasks: totalTasks,
-      assignees: sortedAssignees,
     });
   }
 
@@ -695,24 +815,64 @@ function summarizeHistory(
     .filter((m) => m.role === "user")
     .map((m) => m.content.slice(0, 100));
 
-  const assistantHints = history
-    .filter((m) => m.role === "assistant")
-    .map((m) => {
-      const content = m.content.toLowerCase();
-      if (content.includes("created")) return "created issues";
-      if (content.includes("updated")) return "updated issues";
-      if (content.includes("sprint")) return "discussed sprints";
-      if (content.includes("issue")) return "discussed issues";
-      return "";
-    })
-    .filter(Boolean);
+  const dataFlow: string[] = [];
+
+  for (const msg of history.filter((m) => m.role === "assistant")) {
+    const content = msg.content;
+
+    const issueCountMatch = content.match(/(\d+)\s*issues?\b/i);
+    const pointsMatch = content.match(/(\d+)\s*(?:story\s*)?points?\b/i);
+    const sprintMatch = content.match(
+      /["']?([A-Z]+-?\w*\s*Sprint\s*\d+)["']?/i
+    );
+
+    const moreThanMatch = content.match(
+      /(\d+)\s*(?:issues?\s*)?(?:have|has|with)\s*more\s*than\s*(\d+)\s*(?:story\s*)?points?/i
+    );
+    const assigneeMatch = content.match(
+      /(\w+(?:\s+\w+)?)'s\s*tasks?|assigned\s*to\s*(\w+(?:\s+\w+)?)/i
+    );
+
+    if (sprintMatch && issueCountMatch) {
+      dataFlow.push(
+        `fetched ${issueCountMatch[1]} issues from ${sprintMatch[1]}`
+      );
+    } else if (issueCountMatch && pointsMatch) {
+      dataFlow.push(`${issueCountMatch[1]} issues (${pointsMatch[1]} pts)`);
+    }
+
+    if (moreThanMatch) {
+      dataFlow.push(
+        `filtered to ${moreThanMatch[1]} with >${moreThanMatch[2]} pts`
+      );
+    }
+
+    if (assigneeMatch) {
+      const name = assigneeMatch[1] || assigneeMatch[2];
+      const countInContext = content.match(
+        new RegExp(
+          `(\\d+)\\s*(?:issues?|tasks?).*${name}|${name}.*?(\\d+)\\s*(?:issues?|tasks?)`,
+          "i"
+        )
+      );
+      if (countInContext) {
+        const count = countInContext[1] || countInContext[2];
+        dataFlow.push(`filtered to ${count} for ${name}`);
+      } else {
+        dataFlow.push(`filtered for ${name}`);
+      }
+    }
+  }
 
   const parts: string[] = [];
-  if (userMessages.length > 0) {
-    parts.push(`User asked about: ${userMessages.slice(-2).join("; ")}`);
+
+  if (dataFlow.length > 0) {
+    const uniqueFlow = [...new Set(dataFlow)].slice(-3);
+    parts.push(`Data flow: ${uniqueFlow.join(" → ")}`);
   }
-  if (assistantHints.length > 0) {
-    parts.push(`Actions: ${[...new Set(assistantHints)].join(", ")}`);
+
+  if (userMessages.length > 0) {
+    parts.push(`Last questions: ${userMessages.slice(-2).join("; ")}`);
   }
 
   return parts.join(". ") || "";
@@ -768,12 +928,27 @@ function extractDataContext(
   return dataPoints.join("; ");
 }
 
+interface AnalyzeCachedDataResult {
+  message: string;
+  issues?: Array<{
+    key: string;
+    key_link: string;
+    summary: string;
+    status: string;
+    assignee: string | null;
+    story_points: number | null;
+  }>;
+}
+
 function handleAnalyzeCachedData(
   cachedData: CachedData | undefined,
   args: Record<string, unknown>
-): string {
+): AnalyzeCachedDataResult {
   if (!cachedData?.issues || cachedData.issues.length === 0) {
-    return "No cached data available. Please fetch issues first using get_sprint_issues.";
+    return {
+      message:
+        "No cached data available. Please fetch issues first using get_sprint_issues.",
+    };
   }
 
   const operation = args.operation as string | undefined;
@@ -783,7 +958,10 @@ function handleAnalyzeCachedData(
     | undefined;
   const issues = cachedData.issues;
 
-  const matchesCondition = (value: number | string | null): boolean => {
+  const matchesCondition = (
+    value: number | string | null,
+    fieldName: string | undefined
+  ): boolean => {
     if (!condition) return true;
     if (value === null) return false;
 
@@ -801,7 +979,14 @@ function handleAnalyzeCachedData(
     const eq = condition.eq as string | undefined;
     if (eq !== undefined) {
       const strValue = String(value).toLowerCase();
-      return strValue === eq.toLowerCase();
+      const searchValue = eq.toLowerCase();
+
+      if (fieldName === "assignee") {
+        const searchParts = searchValue.split(/\s+/);
+        return searchParts.every((part) => strValue.includes(part));
+      }
+
+      return strValue === searchValue;
     }
 
     return true;
@@ -825,44 +1010,40 @@ function handleAnalyzeCachedData(
   switch (operation) {
     case "count": {
       const count = issues.filter((issue) =>
-        matchesCondition(getFieldValue(issue))
+        matchesCondition(getFieldValue(issue), field)
       ).length;
       const conditionStr = condition
         ? ` matching ${JSON.stringify(condition)}`
         : "";
-      return `${count} issues${conditionStr} (out of ${issues.length} total)`;
+      return {
+        message: `${count} issues${conditionStr} (out of ${issues.length} total)`,
+      };
     }
 
     case "filter": {
       const filtered = issues.filter((issue) =>
-        matchesCondition(getFieldValue(issue))
+        matchesCondition(getFieldValue(issue), field)
       );
       if (filtered.length === 0) {
-        return "No issues match the criteria.";
+        return { message: "No issues match the criteria." };
       }
-      const issueList = filtered
-        .slice(0, 20)
-        .map(
-          (i) =>
-            `${i.key}: ${i.summary.slice(0, 50)}${
-              i.summary.length > 50 ? "..." : ""
-            } (${i.story_points ?? 0} pts)`
-        )
-        .join("\n");
-      const suffix =
-        filtered.length > 20 ? `\n...and ${filtered.length - 20} more` : "";
-      return `Found ${filtered.length} issues:\n${issueList}${suffix}`;
+      return {
+        message: `Found ${filtered.length} issues`,
+        issues: filtered,
+      };
     }
 
     case "sum": {
       if (field !== "story_points") {
-        return "Sum operation only works with story_points field.";
+        return { message: "Sum operation only works with story_points field." };
       }
       const total = issues.reduce(
         (acc, issue) => acc + (issue.story_points ?? 0),
         0
       );
-      return `Total story points: ${total} (from ${issues.length} issues)`;
+      return {
+        message: `Total story points: ${total} (from ${issues.length} issues)`,
+      };
     }
 
     case "group": {
@@ -876,11 +1057,13 @@ function handleAnalyzeCachedData(
       const groupList = sorted
         .map(([key, count]) => `${key}: ${count}`)
         .join("\n");
-      return `Grouped by ${field}:\n${groupList}`;
+      return { message: `Grouped by ${field}:\n${groupList}` };
     }
 
     default:
-      return "Unknown operation. Use: count, filter, sum, or group.";
+      return {
+        message: "Unknown operation. Use: count, filter, sum, or group.",
+      };
   }
 }
 
@@ -889,7 +1072,8 @@ async function* orchestrate(
   cookieHeader: string,
   configId: string,
   csvData?: CSVRow[],
-  cachedData?: CachedData
+  cachedData?: CachedData,
+  useReviewer?: boolean
 ): AsyncGenerator<StreamEvent> {
   const systemPrompt = generateSystemPrompt();
 
@@ -948,6 +1132,9 @@ async function* orchestrate(
   ];
 
   let iterations = 0;
+  const userQuestion =
+    currentMessage?.role === "user" ? currentMessage.content : undefined;
+  let reviewData: ReviewData = { userQuestion };
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
@@ -968,10 +1155,24 @@ async function* orchestrate(
     const assistantMessage = response.message;
 
     if (!assistantMessage.tool_calls?.length) {
+      let fullResponse = "";
       for await (const chunk of streamFinalAnswer(messages)) {
+        fullResponse += chunk;
         yield { type: "chunk", content: chunk };
       }
+
       yield { type: "done" };
+
+      if (useReviewer && Object.keys(reviewData).length > 0) {
+        const review = await reviewResponse(fullResponse, reviewData);
+        yield {
+          type: "review_complete",
+          pass: review.pass,
+          reason: review.reason,
+          summary: review.summary,
+        };
+      }
+
       return;
     }
 
@@ -1070,6 +1271,87 @@ async function* orchestrate(
         tool: toolName,
         content: resultSummary,
       };
+
+      if (toolName === "get_sprint_issues") {
+        const data = toolResult as {
+          total_issues: number;
+          total_story_points: number;
+          sprints: Record<
+            string,
+            {
+              issues: Array<{
+                key: string;
+                assignee: string | null;
+                story_points: number | null;
+              }>;
+            }
+          >;
+        };
+        const issues: Array<{
+          key: string;
+          assignee: string;
+          points: number | null;
+        }> = [];
+        for (const sprint of Object.values(data.sprints || {})) {
+          for (const issue of sprint.issues || []) {
+            issues.push({
+              key: issue.key,
+              assignee: issue.assignee?.split("@")[0] || "unassigned",
+              points: issue.story_points,
+            });
+          }
+        }
+        const assigneesArg = (toolArgs.assignees || toolArgs.assignee) as
+          | string[]
+          | undefined;
+        const sprintIdsArg = (toolArgs.sprint_ids ||
+          (toolArgs.sprint_id ? [toolArgs.sprint_id] : undefined)) as
+          | number[]
+          | undefined;
+        const statusArg = (toolArgs.status_filters ||
+          (toolArgs.status ? [toolArgs.status] : undefined)) as
+          | string[]
+          | undefined;
+        const sprintNames = Object.keys(data.sprints || {});
+
+        reviewData = {
+          ...reviewData,
+          issueCount: data.total_issues,
+          totalPoints: data.total_story_points,
+          issues,
+          sprintName: sprintNames.join(", ") || undefined,
+          appliedFilters: {
+            assignees: assigneesArg,
+            sprintIds: sprintIdsArg,
+            statusFilters: statusArg,
+          },
+        };
+      } else if (toolName === "analyze_cached_data") {
+        const data = toolResult as AnalyzeCachedDataResult;
+        if (data.issues?.length) {
+          const points = data.issues.reduce(
+            (sum, i) => sum + (i.story_points ?? 0),
+            0
+          );
+          const issues = data.issues.map((i) => ({
+            key: i.key,
+            assignee: i.assignee?.split("@")[0] || "unassigned",
+            points: i.story_points,
+          }));
+          const condition = toolArgs.condition as
+            | Record<string, unknown>
+            | undefined;
+          reviewData = {
+            ...reviewData,
+            issueCount: data.issues.length,
+            totalPoints: points,
+            issues,
+            appliedFilters: {
+              assignees: condition?.eq ? [condition.eq as string] : undefined,
+            },
+          };
+        }
+      }
 
       const structuredDataItems = extractStructuredData(
         toolName,
@@ -1249,8 +1531,8 @@ function summarizeToolResult(toolName: string, result: unknown): string {
       return msg;
     }
     case "analyze_cached_data": {
-      const data = result as string;
-      return data.split("\n")[0];
+      const data = result as AnalyzeCachedDataResult;
+      return data.message;
     }
     default:
       return "Tool executed successfully";
@@ -1337,6 +1619,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       cachedData,
       executeAction,
       configId,
+      useReviewer = false,
     } = body;
     const cookieHeader = request.headers.get("cookie") || "";
 
@@ -1384,7 +1667,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         cookieHeader,
         effectiveConfigId,
         csvData,
-        cachedData
+        cachedData,
+        useReviewer
       );
       const sseStream = createSSEStream(generator);
 
@@ -1405,7 +1689,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       cookieHeader,
       effectiveConfigId,
       csvData,
-      cachedData
+      cachedData,
+      useReviewer
     )) {
       if (event.type === "chunk" && event.content) {
         finalContent += event.content;

@@ -9,6 +9,10 @@ export type {
   CachedIssue,
   PendingAction,
   ExecuteActionPayload,
+  ReviewIssue,
+  ReviewData,
+  ReviewResult,
+  AppliedFilters,
 } from "./api";
 
 export type { ChatMessage, ToolCall, OllamaResponse } from "./ollama";

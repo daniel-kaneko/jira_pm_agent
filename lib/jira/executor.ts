@@ -4,6 +4,7 @@ import {
   getCachedTeamMembers,
   getStoryPointsFieldId,
   getCachedData,
+  getCachedSprints,
 } from "./cache";
 import { TOOL_NAMES } from "./tools";
 import { RETRY_DELAY_MS, MAX_RETRIES } from "@/lib/constants";
@@ -20,7 +21,6 @@ import type {
 } from "./types";
 import type { ToolCallInput } from "../types";
 
-type PrepareSearchResult = ToolResultMap["prepare_search"];
 type GetSprintIssuesResult = ToolResultMap["get_sprint_issues"];
 type GetIssueResult = ToolResultMap["get_issue"];
 type GetActivityResult = ToolResultMap["get_activity"];
@@ -147,91 +147,27 @@ function applyFilters<T>(
     .reduce((acc, filterFn) => acc.filter(filterFn), items);
 }
 
-async function handlePrepareSearch(
-  config: JiraProjectConfig,
-  args: Record<string, unknown>
-): Promise<PrepareSearchResult> {
-  const names = (args.names as string[] | undefined) || [];
-  let sprintIds = args.sprint_ids as number[] | undefined;
-
-  const client = createJiraClient(config);
-  const boardId = getBoardId(config);
-
-  const [boardInfo, allSprints, cachedTeam] = await Promise.all([
-    client.getBoardInfo(boardId),
-    client.listSprints(boardId, "all", 50),
-    getCachedTeamMembers(config.id),
-  ]);
-
-  if (!sprintIds || sprintIds.length === 0) {
-    const activeSprint = allSprints.find((sprint) => sprint.state === "active");
-    sprintIds = activeSprint ? [activeSprint.id] : [allSprints[0]?.id];
-  } else {
-    validateSprintIds(sprintIds, allSprints);
-  }
-
-  const sprintInfos = sprintIds.map((sprintId) => {
-    const sprint = allSprints.find((sp) => sp.id === sprintId)!;
-    return { id: sprint.id, name: sprint.name, state: sprint.state };
-  });
-
-  if (names.length === 0) {
-    return {
-      all_team: true,
-      team_members: cachedTeam.map((member) => member.email),
-      board: { name: boardInfo.name, project_name: boardInfo.project_name },
-      sprints: sprintInfos,
-    };
-  }
-
-  const people = names.map((nameInput) => {
-    const nameLower = nameInput.toLowerCase().trim();
-    const nameParts = nameLower.split(/\s+/);
-
-    let matchingMembers = cachedTeam.filter((member) => {
-      const memberNameLower = member.name.toLowerCase();
-      const emailLower = member.email.toLowerCase();
-      return nameParts.every(
-        (part) => memberNameLower.includes(part) || emailLower.includes(part)
-      );
-    });
-
-    if (matchingMembers.length === 0) {
-      matchingMembers = cachedTeam.filter((member) => {
-        const memberNameLower = member.name.toLowerCase();
-        const emailLower = member.email.toLowerCase();
-        return nameParts.some(
-          (part) => memberNameLower.includes(part) || emailLower.includes(part)
-        );
-      });
-    }
-
-    const matchingEmails = matchingMembers.map((member) => member.email);
-
-    return {
-      name: nameInput,
-      resolved_email: matchingEmails.length === 1 ? matchingEmails[0] : null,
-      possible_matches: matchingEmails.length > 1 ? matchingEmails : [],
-      not_found: matchingEmails.length === 0,
-    };
-  });
-
-  return {
-    all_team: false,
-    people,
-    board: { name: boardInfo.name, project_name: boardInfo.project_name },
-    sprints: sprintInfos,
-  };
+function normalizeToArray<T>(value: T | T[] | undefined): T[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  return Array.isArray(value) ? value : [value];
 }
 
 async function handleGetSprintIssues(
   config: JiraProjectConfig,
   args: Record<string, unknown>
 ): Promise<GetSprintIssuesResult> {
-  const sprint_ids = args.sprint_ids as number[] | undefined;
-  const assignees = args.assignees as string[] | undefined;
-  const assignee_emails = args.assignee_emails as string[] | undefined;
-  const status_filters = args.status_filters as string[] | undefined;
+  const sprint_ids = normalizeToArray(
+    args.sprint_ids ?? args.sprint_id
+  ) as number[] | undefined;
+  const assignees = normalizeToArray(
+    args.assignees ?? args.assignee
+  ) as string[] | undefined;
+  const assignee_emails = normalizeToArray(
+    args.assignee_emails ?? args.assignee_email
+  ) as string[] | undefined;
+  const status_filters = normalizeToArray(
+    args.status_filters ?? args.status ?? args.statuses
+  ) as string[] | undefined;
   const keyword = args.keyword as string | undefined;
   const min_story_points = args.min_story_points as number | undefined;
   const max_story_points = args.max_story_points as number | undefined;
@@ -241,16 +177,15 @@ async function handleGetSprintIssues(
   }
 
   const client = createJiraClient(config);
-  const boardId = getBoardId(config);
 
-  const boardSprints = await client.listSprints(boardId, "all", 50);
-  validateSprintIds(sprint_ids, boardSprints);
-
-  const assigneeInput = assignees || assignee_emails;
-  const [cachedTeam, storyPointsFieldId] = await Promise.all([
+  const [boardSprints, cachedTeam, storyPointsFieldId] = await Promise.all([
+    getCachedSprints(config.id),
     getCachedTeamMembers(config.id),
     getStoryPointsFieldId(config.id),
   ]);
+  validateSprintIds(sprint_ids, boardSprints);
+
+  const assigneeInput = assignees || assignee_emails;
 
   const resolvedEmails = assigneeInput?.map((input) =>
     resolveName(input, cachedTeam)
@@ -366,9 +301,8 @@ async function handleGetActivity(
   }
 
   const client = createJiraClient(config);
-  const boardId = getBoardId(config);
 
-  const boardSprints = await client.listSprints(boardId, "all", 50);
+  const boardSprints = await getCachedSprints(config.id);
 
   if (!sprint_ids || sprint_ids.length === 0) {
     const activeSprint = boardSprints.find((s) => s.state === "active");
@@ -490,10 +424,9 @@ async function moveToSprintIfNeeded(
   if (!sprintId) return null;
 
   const client = createJiraClient(config);
-  const boardId = getBoardId(config);
 
   await client.moveIssuesToSprint(sprintId, [issueKey]);
-  const sprints = await client.listSprints(boardId, "all", 50);
+  const sprints = await getCachedSprints(config.id);
   const sprint = sprints.find((sp) => sp.id === sprintId);
   return sprint?.name || `Sprint ${sprintId}`;
 }
@@ -529,15 +462,16 @@ async function handleCreateIssues(
   const client = createJiraClient(config);
   const boardId = getBoardId(config);
 
-  const [boardInfo, storyPointsFieldId, cachedTeam, sprints] =
+  const [boardInfo, storyPointsFieldId, cachedTeam, allSprints] =
     await Promise.all([
       client.getBoardInfo(boardId),
       getStoryPointsFieldId(config.id),
       getCachedTeamMembers(config.id),
-      client.listSprints(boardId, "active", 1),
+      getCachedSprints(config.id),
     ]);
 
-  const activeSprintId = sprints.length > 0 ? sprints[0].id : null;
+  const activeSprint = allSprints.find((s) => s.state === "active");
+  const activeSprintId = activeSprint?.id ?? null;
 
   const preparedIssues = await Promise.all(
     issues.map(async (issue) => {
@@ -769,12 +703,23 @@ async function handleListSprints(
   const state = (args.state as string) || "all";
   const limit = (args.limit as number) || 20;
 
-  const client = createJiraClient(config);
-  const boardId = getBoardId(config);
+  let sprints;
 
-  const filterState =
-    state === "all" ? "all" : (state as "active" | "closed" | "future");
-  const sprints = await client.listSprints(boardId, filterState, limit);
+  if (state === "future") {
+    const client = createJiraClient(config);
+    const boardId = getBoardId(config);
+    sprints = await client.listSprints(boardId, "future", limit);
+  } else {
+    const cached = await getCachedSprints(config.id);
+    if (state === "active") {
+      sprints = cached.filter((s) => s.state === "active");
+    } else if (state === "closed") {
+      sprints = cached.filter((s) => s.state === "closed");
+    } else {
+      sprints = cached;
+    }
+    sprints = sprints.slice(0, limit);
+  }
 
   return {
     sprints: sprints.map((sprint) => ({
@@ -814,7 +759,6 @@ export async function executeJiraTool(
 ): Promise<
   | ListSprintsResult
   | GetContextResult
-  | PrepareSearchResult
   | GetSprintIssuesResult
   | GetIssueResult
   | GetActivityResult
@@ -830,9 +774,6 @@ export async function executeJiraTool(
 
     case "get_context":
       return handleGetContext(config);
-
-    case "prepare_search":
-      return handlePrepareSearch(config, args);
 
     case "get_sprint_issues":
       return handleGetSprintIssues(config, args);

@@ -29,6 +29,15 @@ interface IssueListCardProps {
 
 type SortField = "key" | "summary" | "status" | "assignee" | "points";
 
+interface AssigneeStats {
+  name: string;
+  email: string;
+  points: number;
+  tasks: number;
+}
+
+const BREAKDOWN_PREVIEW_COUNT = 5;
+
 function exportIssues(issues: IssueData[], sprintName: string): void {
   const headers = ["Key", "Summary", "Status", "Assignee", "Story Points"];
   const rows = issues.map((issue) => [
@@ -129,6 +138,7 @@ function MultiSelectDropdown({
 
 export function IssueListCard({ data }: IssueListCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isBreakdownExpanded, setIsBreakdownExpanded] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("key");
@@ -211,6 +221,53 @@ export function IssueListCard({ data }: IssueListCardProps) {
   const isFiltered =
     search || statusFilter.length > 0 || assigneeFilter.length > 0;
 
+  const filteredStoryPoints = useMemo(
+    () =>
+      filteredAndSortedIssues.reduce(
+        (sum, issue) => sum + (issue.story_points ?? 0),
+        0
+      ),
+    [filteredAndSortedIssues]
+  );
+
+  const assigneeStats = useMemo((): AssigneeStats[] => {
+    const statsMap = new Map<string, AssigneeStats>();
+
+    for (const issue of filteredAndSortedIssues) {
+      const email = issue.assignee || "unassigned";
+      const name =
+        email === "unassigned"
+          ? "Unassigned"
+          : email
+              .split("@")[0]
+              .split(".")
+              .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+              .join(" ");
+
+      const existing = statsMap.get(email);
+      if (existing) {
+        existing.points += issue.story_points ?? 0;
+        existing.tasks += 1;
+      } else {
+        statsMap.set(email, {
+          name,
+          email,
+          points: issue.story_points ?? 0,
+          tasks: 1,
+        });
+      }
+    }
+
+    return [...statsMap.values()].sort((a, b) => b.points - a.points);
+  }, [filteredAndSortedIssues]);
+
+  const showBreakdown = assigneeStats.length > 1;
+  const hasMoreBreakdown = assigneeStats.length > BREAKDOWN_PREVIEW_COUNT;
+  const displayedAssignees = isBreakdownExpanded
+    ? assigneeStats
+    : assigneeStats.slice(0, BREAKDOWN_PREVIEW_COUNT);
+  const maxPoints = Math.max(...assigneeStats.map((a) => a.points), 1);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -240,7 +297,9 @@ export function IssueListCard({ data }: IssueListCardProps) {
                 in {data.sprint_name}
               </div>
               <div className="text-sm text-[var(--fg-muted)]">
-                {data.total_story_points} story points
+                {isFiltered
+                  ? `${filteredStoryPoints} of ${data.total_story_points} story points`
+                  : `${data.total_story_points} story points`}
               </div>
             </div>
           </div>
@@ -352,43 +411,109 @@ export function IssueListCard({ data }: IssueListCardProps) {
         </div>
       )}
 
+      {showBreakdown && (
+        <div className="border-b border-[var(--bg-highlight)]">
+          <div className="px-4 py-2 bg-[var(--bg)] border-b border-[var(--bg-highlight)]">
+            <div className="flex items-center gap-2 text-sm text-[var(--fg-muted)]">
+              <span>📊</span>
+              <span>
+                Story Points by Assignee
+                {isFiltered && (
+                  <span className="text-[var(--yellow)]"> (filtered)</span>
+                )}
+              </span>
+            </div>
+          </div>
+          <div className="px-4 py-2 space-y-2">
+            {displayedAssignees.map((assignee, index) => {
+              const percentage = (assignee.points / maxPoints) * 100;
+              const isTop = index === 0;
+
+              return (
+                <div key={assignee.email} className="flex items-center gap-3">
+                  <span
+                    className={`text-xs font-medium truncate w-36 ${
+                      isTop ? "text-[var(--green)]" : "text-[var(--fg)]"
+                    }`}
+                    title={assignee.name}
+                  >
+                    {assignee.name}
+                  </span>
+                  <div className="flex-1 h-4 bg-[var(--bg-highlight)] rounded-full overflow-hidden relative">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        isTop ? "bg-[var(--green)]" : "bg-[var(--blue)]"
+                      }`}
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-[var(--fg-muted)] shrink-0 w-24 text-right">
+                    {assignee.points} pts ({assignee.tasks})
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {hasMoreBreakdown && (
+            <div className="px-4 py-2 border-t border-[var(--bg-highlight)]">
+              <button
+                onClick={() => setIsBreakdownExpanded(!isBreakdownExpanded)}
+                className="w-full text-center text-xs text-[var(--blue)] hover:text-[var(--cyan)] transition-colors cursor-pointer"
+              >
+                {isBreakdownExpanded
+                  ? "Show less"
+                  : `View all ${assigneeStats.length} assignees`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="divide-y divide-[var(--bg-highlight)]">
         {displayedIssues.length === 0 ? (
           <div className="px-4 py-8 text-center text-[var(--fg-muted)]">
             No issues match your filters
           </div>
         ) : (
-          displayedIssues.map((issue, index) => (
-            <div
-              key={issue.key}
-              className="px-4 py-2 hover:bg-[var(--bg-highlight)] transition-colors"
-            >
-              <div className="flex items-start gap-2">
-                <span className="text-[var(--fg-muted)] text-sm shrink-0 w-6">
-                  {index + 1}.
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={issue.key_link.match(/\((.*?)\)/)?.[1] || "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-[var(--blue)] hover:text-[var(--cyan)] text-sm min-w-[80px]"
-                    >
-                      {issue.key}
-                    </a>
-                    <span className="text-[var(--fg)] text-sm truncate">
-                      {issue.summary}
-                    </span>
-                  </div>
-                  <div className="text-xs text-[var(--fg-muted)] mt-0.5">
-                    {issue.status} • {issue.assignee || "Unassigned"} •{" "}
-                    {issue.story_points ?? "—"} pts
+          <>
+            <div className="px-4 py-2 bg-[var(--bg)] border-b border-[var(--bg-highlight)]">
+              <div className="flex items-center gap-2 text-sm text-[var(--fg-muted)]">
+                <span>📊</span>
+                <span>Tasks Breakdown</span>
+              </div>
+            </div>
+            {displayedIssues.map((issue, index) => (
+              <div
+                key={issue.key}
+                className="px-4 py-2 hover:bg-[var(--bg-highlight)] transition-colors"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-[var(--fg-muted)] text-sm shrink-0 w-6">
+                    {index + 1}.
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={issue.key_link.match(/\((.*?)\)/)?.[1] || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-[var(--blue)] hover:text-[var(--cyan)] text-sm min-w-[80px]"
+                      >
+                        {issue.key}
+                      </a>
+                      <span className="text-[var(--fg)] text-sm truncate">
+                        {issue.summary}
+                      </span>
+                    </div>
+                    <div className="text-xs text-[var(--fg-muted)] mt-0.5">
+                      {issue.status} • {issue.assignee || "Unassigned"} •{" "}
+                      {issue.story_points ?? "—"} pts
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+          </>
         )}
       </div>
 

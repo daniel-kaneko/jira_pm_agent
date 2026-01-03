@@ -17,7 +17,7 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 - 📈 Track status changes and activity over time
 - 🎨 Multiple themes with visual effects
 - ⚡ Streaming responses with reasoning display
-- 🔄 Smart context management for follow-up questions
+- 🔄 Smart context management with cached data analysis for follow-ups
 - 🔐 Simple authentication with environment-based credentials
 - 🤖 **Agentic RAG** - AI dynamically retrieves context via tools
 
@@ -96,17 +96,17 @@ The agent uses an **Agentic RAG** approach - the AI dynamically retrieves contex
 
 ### Context Tools
 
-| Tool           | Description                                       |
-| -------------- | ------------------------------------------------- |
-| `list_sprints` | Get available sprints with IDs (called on demand) |
-| `get_context`  | Get team members and statuses                     |
-| `query_csv`    | Query uploaded CSV data (client-side)             |
+| Tool                  | Description                                          |
+| --------------------- | ---------------------------------------------------- |
+| `list_sprints`        | Get available sprints with IDs (called on demand)    |
+| `get_context`         | Get team members and statuses                        |
+| `query_csv`           | Query uploaded CSV data (client-side)                |
+| `analyze_cached_data` | Analyze previously fetched issues (count/filter/sum) |
 
 ### Read Tools
 
 | Tool                | Description                                        |
 | ------------------- | -------------------------------------------------- |
-| `prepare_search`    | Resolve team member names to emails for filtering  |
 | `get_sprint_issues` | Get issues from sprints with multi-filter support  |
 | `get_issue`         | Get details of a specific issue including comments |
 | `get_activity`      | Get status changes over time for tracking progress |
@@ -119,6 +119,19 @@ The agent uses an **Agentic RAG** approach - the AI dynamically retrieves contex
 | `update_issues` | Bulk update issues (parallel with retry logic)          |
 
 Write operations require user confirmation before execution.
+
+### Cached Data Analysis
+
+When the AI fetches issues (via `get_sprint_issues`), they're cached client-side. Follow-up questions can analyze this data without new API calls:
+
+| Operation | Example Question                    | Result     |
+| --------- | ----------------------------------- | ---------- |
+| `count`   | "How many have more than 5 points?" | Number     |
+| `filter`  | "Show me Daniel's tasks"            | Issue list |
+| `sum`     | "What's the total story points?"    | Number     |
+| `group`   | "Break down by assignee"            | Grouped    |
+
+**Automatic UI**: When filtering returns issues, the interactive table is automatically displayed - no AI decision needed.
 
 ## CSV Upload
 

@@ -4,7 +4,6 @@ export const TOOL_NAMES = [
   "list_sprints",
   "get_context",
   "query_csv",
-  "prepare_search",
   "prepare_issues",
   "get_sprint_issues",
   "get_issue",
@@ -101,34 +100,6 @@ Returns: { rows: [...], summary: { totalRows, filteredRows } }`,
   {
     type: "function",
     function: {
-      name: "prepare_search",
-      description: `Resolve names to emails.
-
-Examples:
-- prepare_search() - get all team members for active sprint
-- prepare_search(names: ["John"]) - resolve John's email
-- prepare_search(sprint_ids: [9887]) - get all team for specific sprint
-
-Returns: { people: [{name, resolved_email}], sprints: [{id, name}] }`,
-      parameters: {
-        type: "object",
-        properties: {
-          names: {
-            type: "array",
-            description: "Names to resolve (omit or empty = all team members)",
-          },
-          sprint_ids: {
-            type: "array",
-            description: "Sprint IDs (defaults to active sprint if omitted)",
-          },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "get_sprint_issues",
       description: `Get issues from sprints with filtering.
 
@@ -137,7 +108,8 @@ Examples:
 - get_sprint_issues(sprint_ids: [9887], status_filters: ["Concluído"]) - done tasks
 - get_sprint_issues(sprint_ids: [9887], status_filters: ["UI Review"]) - in UI review
 - get_sprint_issues(sprint_ids: [9887], min_story_points: 5) - issues with 5+ points
-- get_sprint_issues(sprint_ids: [9887], include_breakdown: true) - with breakdown chart
+
+Breakdown chart shows automatically when multiple assignees are found.
 
 Returns: { total_issues, sprints: { "Sprint Name": { issues: [...] } } }`,
       parameters: {
@@ -167,11 +139,6 @@ Returns: { total_issues, sprints: { "Sprint Name": { issues: [...] } } }`,
           max_story_points: {
             type: "number",
             description: "Filter issues with story points <= this value",
-          },
-          include_breakdown: {
-            type: "boolean",
-            description:
-              "Show assignee breakdown chart (for productivity questions)",
           },
         },
         required: ["sprint_ids"],

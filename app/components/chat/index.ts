@@ -15,15 +15,14 @@ export { ConfirmationCard } from "./ConfirmationCard";
 export { ProjectSelector } from "./ProjectSelector";
 export { VMStatusIndicator } from "./VMStatusIndicator";
 export { RobotStatus } from "./RobotStatus";
+export { ChatContainer } from "./ChatContainer";
 export type { PendingAction } from "./ConfirmationCard";
 
-export type { Message, Source, ReasoningStep, StructuredData, SortDirection } from "./types";
+export type { Message, ReasoningStep, StructuredData, SortDirection } from "./types";
 export type { CSVUploadProps } from "./CSVUpload";
 export { IssueListCard } from "./IssueListCard";
 export type { IssueListData, IssueData } from "./IssueListCard";
 export { SprintComparisonCard } from "./SprintComparisonCard";
-export { AssigneeBreakdownCard } from "./AssigneeBreakdownCard";
-export type { AssigneeBreakdownData, AssigneeStats } from "./AssigneeBreakdownCard";
 export type { HeaderProps } from "./Header";
 export type { MessageBubbleProps } from "./MessageBubble";
 export type { ChatInputProps } from "./ChatInput";

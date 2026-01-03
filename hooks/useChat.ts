@@ -31,6 +31,7 @@ export function useChat() {
   const csvDataRef = useRef<CSVRow[] | null>(null);
   const cachedDataRef = useRef<CachedData | null>(null);
   const configIdRef = useRef<string | null>(null);
+  const useReviewerRef = useRef<boolean>(false);
   const lastMessagesRef = useRef<
     Array<{ role: "user" | "assistant"; content: string }>
   >([]);
@@ -109,6 +110,7 @@ export function useChat() {
           csvData?: CSVRow[];
           cachedData?: CachedData;
           configId?: string;
+          useReviewer?: boolean;
         } = {
           messages: historyForApi,
           stream: true,
@@ -124,6 +126,12 @@ export function useChat() {
 
         if (configIdRef.current) {
           requestBody.configId = configIdRef.current;
+        }
+
+        const useReviewer = localStorage.getItem("useReviewer") === "true";
+        useReviewerRef.current = useReviewer;
+        if (useReviewer) {
+          requestBody.useReviewer = true;
         }
 
         const res = await fetch("/api/ask", {
@@ -220,6 +228,15 @@ export function useChat() {
                   updateAssistantMessage(`Error: ${event.content}`);
                   break;
 
+                case "warning":
+                  if (event.content) {
+                    addReasoningStep({
+                      type: "warning",
+                      content: event.content,
+                    });
+                  }
+                  break;
+
                 case "structured_data":
                   if (event.data) {
                     structuredDataRef.current = [
@@ -236,6 +253,7 @@ export function useChat() {
                       const cachedIssues: CachedIssue[] = issues.map(
                         (issue) => ({
                           key: issue.key,
+                          key_link: issue.key_link,
                           summary: issue.summary,
                           status: issue.status,
                           assignee: issue.assignee,
@@ -275,10 +293,48 @@ export function useChat() {
                         ? structuredDataRef.current
                         : undefined,
                   };
-                  messagesRef.current = [...messagesRef.current, finalMessage];
+                  const showValidating = useReviewerRef.current;
+                  const messageWithValidating = showValidating
+                    ? {
+                        ...finalMessage,
+                        reviewResult: { pass: true, validating: true },
+                      }
+                    : finalMessage;
+
+                  messagesRef.current = [
+                    ...messagesRef.current,
+                    messageWithValidating,
+                  ];
                   setMessages((prevMessages) =>
                     prevMessages.map((msg) =>
-                      msg.id === assistantId ? finalMessage : msg
+                      msg.id === assistantId ? messageWithValidating : msg
+                    )
+                  );
+                  break;
+                }
+
+                case "review_complete": {
+                  const reviewContent =
+                    event.reason ||
+                    (event.pass ? "Data verified" : "Data mismatch detected");
+                  const reviewStep: ReasoningStep = {
+                    content: `🔍 Reviewer: ${reviewContent}`,
+                    type: "review",
+                  };
+                  setMessages((prevMessages) =>
+                    prevMessages.map((msg) =>
+                      msg.id === assistantId
+                        ? {
+                            ...msg,
+                            reviewResult: {
+                              pass: event.pass ?? true,
+                              reason: event.reason,
+                              summary: event.summary,
+                              validating: false,
+                            },
+                            reasoning: [...(msg.reasoning || []), reviewStep],
+                          }
+                        : msg
                     )
                   );
                   break;

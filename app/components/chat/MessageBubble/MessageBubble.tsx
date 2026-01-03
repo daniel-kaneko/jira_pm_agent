@@ -1,15 +1,42 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MessageBubbleProps } from "./types";
 import { IssueListCard, IssueListData } from "../IssueListCard";
 import { SprintComparisonCard } from "../SprintComparisonCard";
-import {
-  AssigneeBreakdownCard,
-  AssigneeBreakdownData,
-} from "../AssigneeBreakdownCard";
 import { TypingIndicator } from "../TypingIndicator";
 import { useStreamedText } from "@/hooks/useStreamedText";
+
+function Tooltip({
+  text,
+  targetRef,
+}: {
+  text: string;
+  targetRef: React.RefObject<HTMLElement | null>;
+}) {
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (targetRef.current) {
+      const rect = targetRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+      });
+    }
+  }, [targetRef]);
+
+  return createPortal(
+    <div
+      className="fixed z-50 px-2 py-1 text-xs bg-[var(--bg-highlight)] border border-[var(--fg-muted)]/20 rounded text-[var(--fg)] whitespace-nowrap"
+      style={{ top: position.top, left: position.left }}
+    >
+      {text}
+    </div>,
+    document.body
+  );
+}
 
 const markdownComponents: Components = {
   a: ({ href, children }) => (
@@ -42,13 +69,10 @@ export function MessageBubble({
   isStreaming = false,
 }: MessageBubbleProps) {
   const [showReasoning, setShowReasoning] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const badgeRef = useRef<HTMLSpanElement>(null);
   const isUser = message.role === "user";
   const displayContent = useStreamedText(message.content, 4, isStreaming);
-  const validSources =
-    message.sources?.filter(
-      (source) => source.name?.trim() && source.url?.trim()
-    ) || [];
-  const hasSources = !isUser && validSources.length > 0;
   const hasReasoning =
     !isUser && message.reasoning && message.reasoning.length > 0;
   const hasStructuredData =
@@ -71,10 +95,6 @@ export function MessageBubble({
       const issueLists = structuredData.filter(
         (data): data is IssueListData => data.type === "issue_list"
       );
-      const assigneeBreakdown = structuredData.find(
-        (data): data is AssigneeBreakdownData =>
-          data.type === "assignee_breakdown"
-      );
 
       return (
         <div className="space-y-3">
@@ -87,9 +107,6 @@ export function MessageBubble({
                 {contentToRender}
               </ReactMarkdown>
             </div>
-          )}
-          {assigneeBreakdown && (
-            <AssigneeBreakdownCard data={assigneeBreakdown} />
           )}
           {issueLists.length === 1 ? (
             <IssueListCard data={issueLists[0]} />
@@ -123,8 +140,40 @@ export function MessageBubble({
           {isUser ? ">" : "λ"}
         </span>
         <div className="flex-1 min-w-0 overflow-hidden">
-          <div className="text-xs text-[var(--fg-muted)] mb-1">
-            {isUser ? "you" : "assistant"}
+          <div className="text-xs text-[var(--fg-muted)] mb-1 flex items-center gap-2">
+            <span>{isUser ? "you" : "assistant"}</span>
+            {!isUser && message.reviewResult && (
+              <>
+                <span
+                  ref={badgeRef}
+                  onMouseEnter={() =>
+                    !message.reviewResult?.validating && setShowTooltip(true)
+                  }
+                  onMouseLeave={() => setShowTooltip(false)}
+                  className={`cursor-default px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                    message.reviewResult.validating
+                      ? "bg-[var(--cyan)]/20 text-[var(--cyan)] animate-pulse"
+                      : message.reviewResult.pass
+                      ? "bg-[var(--green)]/20 text-[var(--green)]"
+                      : "bg-[var(--yellow)]/20 text-[var(--yellow)]"
+                  }`}
+                >
+                  {message.reviewResult.validating
+                    ? "⏳ validating..."
+                    : message.reviewResult.pass
+                    ? "✓ verified"
+                    : "⚠ check"}
+                </span>
+                {showTooltip && !message.reviewResult.validating && (
+                  <Tooltip
+                    text={`${
+                      message.reviewResult.summary || "Checked"
+                    } · See reasoning for details`}
+                    targetRef={badgeRef}
+                  />
+                )}
+              </>
+            )}
           </div>
           {renderContent()}
           {hasReasoning && message.reasoning && (
@@ -142,10 +191,14 @@ export function MessageBubble({
                     <div
                       key={index}
                       className={`break-all ${
-                        step.type === "tool_call"
+                        step.type === "review"
+                          ? "mt-2 pt-2 border-t border-[var(--bg-highlight)] text-[var(--fg-muted)] font-medium not-italic"
+                          : step.type === "tool_call"
                           ? "text-[var(--blue)] opacity-70"
                           : step.type === "tool_result"
                           ? "text-[var(--green)] opacity-70"
+                          : step.type === "warning"
+                          ? "text-[var(--yellow)] opacity-80"
                           : "text-[var(--fg-muted)] opacity-50 italic"
                       }`}
                     >
@@ -154,27 +207,6 @@ export function MessageBubble({
                   ))}
                 </div>
               )}
-            </div>
-          )}
-          {hasSources && (
-            <div className="mt-3 pt-2 border-t border-[var(--bg-highlight)]">
-              <div className="text-xs text-[var(--fg-muted)] mb-1">
-                sources:
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {validSources.map((source, i) => (
-                  <a
-                    key={i}
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-[var(--bg-highlight)] text-[var(--blue)] hover:text-[var(--fg)] transition-colors"
-                  >
-                    <span>→</span>
-                    <span>{source.name}</span>
-                  </a>
-                ))}
-              </div>
             </div>
           )}
         </div>

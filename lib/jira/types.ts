@@ -175,11 +175,6 @@ import type { TOOL_NAMES } from "./tools";
 
 export type ToolName = (typeof TOOL_NAMES)[number];
 
-export interface PrepareSearchArgs {
-  names?: string[];
-  sprint_ids?: number[];
-}
-
 export interface GetSprintIssuesArgs {
   sprint_ids: number[];
   assignees?: string[];
@@ -306,7 +301,6 @@ export type ToolArgsMap = {
   list_sprints: ListSprintsArgs;
   get_context: GetContextArgs;
   query_csv: QueryCSVArgs;
-  prepare_search: PrepareSearchArgs;
   prepare_issues: PrepareIssuesArgs;
   get_sprint_issues: GetSprintIssuesArgs;
   get_issue: GetIssueArgs;
@@ -352,18 +346,6 @@ export type ToolResultMap = {
     }>;
     ready_for_creation: boolean;
     errors: string[];
-  };
-  prepare_search: {
-    all_team: boolean;
-    team_members?: string[];
-    people?: Array<{
-      name: string;
-      resolved_email: string | null;
-      possible_matches: string[];
-      not_found: boolean;
-    }>;
-    board: { name: string; project_name: string };
-    sprints: Array<{ id: number; name: string; state: string }>;
   };
   get_sprint_issues: {
     total_issues: number;

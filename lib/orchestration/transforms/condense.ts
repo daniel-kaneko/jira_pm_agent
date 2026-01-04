@@ -6,6 +6,7 @@ import type {
   SprintIssuesResult,
   PrepareIssuesResult,
   AnalyzeCachedDataResult,
+  GetActivityResult,
 } from "../types";
 import { TOOL_NAMES } from "../../constants";
 
@@ -294,5 +295,30 @@ export function condenseForAI(
     return condenseSprintIssues(result as SprintIssuesResult, toolArgs);
   }
 
+  if (toolName === TOOL_NAMES.GET_ACTIVITY) {
+    return condenseActivity(result as GetActivityResult);
+  }
+
   return result;
+}
+
+function condenseActivity(result: GetActivityResult): object {
+  const byStatus: Record<string, number> = {};
+  const byPerson: Record<string, number> = {};
+
+  for (const change of result.changes) {
+    if (change.field.toLowerCase() === "status" && change.to) {
+      byStatus[change.to] = (byStatus[change.to] || 0) + 1;
+    }
+    const name = change.changed_by.split(" ")[0];
+    byPerson[name] = (byPerson[name] || 0) + 1;
+  }
+
+  return {
+    period: result.period,
+    total_changes: result.total_changes,
+    status_transitions: byStatus,
+    by_person: byPerson,
+    _ui_note: "Activity UI shows full details. Summarize highlights only.",
+  };
 }

@@ -12,7 +12,14 @@ export const lightTools: ToolDefinition[] = [
     function: {
       name: TOOL_NAMES.LIST_SPRINTS,
       description: "Get sprint IDs. Call FIRST when user mentions sprints.",
-      parameters: { type: "object", properties: { state: { type: "string", description: "active/closed/all" }, limit: { type: "number", description: "max" } }, required: [] },
+      parameters: {
+        type: "object",
+        properties: {
+          state: { type: "string", description: "active/closed/all" },
+          limit: { type: "number", description: "max" },
+        },
+        required: [],
+      },
     },
   },
   {
@@ -28,15 +35,32 @@ export const lightTools: ToolDefinition[] = [
     function: {
       name: TOOL_NAMES.QUERY_CSV,
       description: "Query uploaded CSV data with filters.",
-      parameters: { type: "object", properties: { row_range: { type: "string", description: "e.g. 1-100" }, filters: { type: "object", description: "column filters" }, limit: { type: "number", description: "max rows" } }, required: [] },
+      parameters: {
+        type: "object",
+        properties: {
+          row_range: { type: "string", description: "e.g. 1-100" },
+          filters: { type: "object", description: "column filters" },
+          limit: { type: "number", description: "max rows" },
+        },
+        required: [],
+      },
     },
   },
   {
     type: "function",
     function: {
       name: TOOL_NAMES.GET_SPRINT_ISSUES,
-      description: "Get issues from sprints. Requires sprint_ids from list_sprints.",
-      parameters: { type: "object", properties: { sprint_ids: { type: "array", description: "sprint IDs" }, assignees: { type: "array", description: "filter by names" }, status_filters: { type: "array", description: "filter by status" } }, required: ["sprint_ids"] },
+      description:
+        "Get issues from sprints. Requires sprint_ids from list_sprints.",
+      parameters: {
+        type: "object",
+        properties: {
+          sprint_ids: { type: "array", description: "sprint IDs" },
+          assignees: { type: "array", description: "filter by names" },
+          status_filters: { type: "array", description: "filter by status" },
+        },
+        required: ["sprint_ids"],
+      },
     },
   },
   {
@@ -44,7 +68,13 @@ export const lightTools: ToolDefinition[] = [
     function: {
       name: TOOL_NAMES.GET_ISSUE,
       description: "Get single issue details by key.",
-      parameters: { type: "object", properties: { issue_key: { type: "string", description: "e.g. PROJ-123" } }, required: ["issue_key"] },
+      parameters: {
+        type: "object",
+        properties: {
+          issue_key: { type: "string", description: "e.g. PROJ-123" },
+        },
+        required: ["issue_key"],
+      },
     },
   },
   {
@@ -52,7 +82,15 @@ export const lightTools: ToolDefinition[] = [
     function: {
       name: TOOL_NAMES.GET_ACTIVITY,
       description: "Get status changes since a date.",
-      parameters: { type: "object", properties: { sprint_ids: { type: "array", description: "sprint IDs" }, since: { type: "string", description: "YYYY-MM-DD" }, to_status: { type: "string", description: "filter to status" } }, required: ["since"] },
+      parameters: {
+        type: "object",
+        properties: {
+          sprint_ids: { type: "array", description: "sprint IDs" },
+          since: { type: "string", description: "YYYY-MM-DD" },
+          to_status: { type: "string", description: "filter to status" },
+        },
+        required: ["since"],
+      },
     },
   },
   {
@@ -60,7 +98,14 @@ export const lightTools: ToolDefinition[] = [
     function: {
       name: TOOL_NAMES.PREPARE_ISSUES,
       description: "Prepare CSV rows for issue creation.",
-      parameters: { type: "object", properties: { row_range: { type: "string", description: "e.g. 1-100" }, mapping: { type: "object", description: "column mappings" } }, required: ["mapping"] },
+      parameters: {
+        type: "object",
+        properties: {
+          row_range: { type: "string", description: "e.g. 1-100" },
+          mapping: { type: "object", description: "column mappings" },
+        },
+        required: ["mapping"],
+      },
     },
   },
   {
@@ -68,7 +113,13 @@ export const lightTools: ToolDefinition[] = [
     function: {
       name: TOOL_NAMES.CREATE_ISSUES,
       description: "Create issues in bulk. Requires confirmation.",
-      parameters: { type: "object", properties: { issues: { type: "array", description: "issues to create" } }, required: ["issues"] },
+      parameters: {
+        type: "object",
+        properties: {
+          issues: { type: "array", description: "issues to create" },
+        },
+        required: ["issues"],
+      },
     },
   },
   {
@@ -76,15 +127,30 @@ export const lightTools: ToolDefinition[] = [
     function: {
       name: TOOL_NAMES.UPDATE_ISSUES,
       description: "Update existing issues in bulk. Requires confirmation.",
-      parameters: { type: "object", properties: { issues: { type: "array", description: "issues to update" } }, required: ["issues"] },
+      parameters: {
+        type: "object",
+        properties: {
+          issues: { type: "array", description: "issues to update" },
+        },
+        required: ["issues"],
+      },
     },
   },
   {
     type: "function",
     function: {
       name: TOOL_NAMES.ANALYZE_CACHED_DATA,
-      description: "Analyze previously fetched issues (count, filter, sum, group).",
-      parameters: { type: "object", properties: { operation: { type: "string", description: "count/filter/sum/group" }, field: { type: "string", description: "field to analyze" }, condition: { type: "object", description: "filter condition" } }, required: ["operation", "field"] },
+      description:
+        "Analyze previously fetched issues (count, filter, sum, group).",
+      parameters: {
+        type: "object",
+        properties: {
+          operation: { type: "string", description: "count/filter/sum/group" },
+          field: { type: "string", description: "field to analyze" },
+          condition: { type: "object", description: "filter condition" },
+        },
+        required: ["operation", "field"],
+      },
     },
   },
 ];
@@ -95,8 +161,10 @@ export const lightTools: ToolDefinition[] = [
  * @param toolName - Name of the tool to get.
  * @returns Full tool definition or undefined if not found.
  */
-export function getFullToolDefinition(toolName: string): ToolDefinition | undefined {
-  return jiraTools.find(t => t.function.name === toolName);
+export function getFullToolDefinition(
+  toolName: string
+): ToolDefinition | undefined {
+  return jiraTools.find((t) => t.function.name === toolName);
 }
 
 /**
@@ -106,7 +174,7 @@ export function getFullToolDefinition(toolName: string): ToolDefinition | undefi
  */
 export function getFullToolDefinitions(toolNames: string[]): ToolDefinition[] {
   return toolNames
-    .map(name => getFullToolDefinition(name))
+    .map((name) => getFullToolDefinition(name))
     .filter((t): t is ToolDefinition => t !== undefined);
 }
 
@@ -279,6 +347,8 @@ Examples:
 - get_activity(sprint_ids: [3625], since: "2025-12-23") - changes since Dec 23
 - get_activity(since: "2025-12-01", to_status: "Concluído") - what moved to Done
 - get_activity(since: "2025-12-20", assignees: ["John Doe"]) - John's changes
+
+Activity UI already lists all issues with their changes and details, so just summarize what happened in the period.
 
 Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, changed_at}] }`,
       parameters: {

@@ -27,7 +27,7 @@ RESPONSE: "${aiResponse}"
 Check:
 1. Do the numbers match? (totals, per-person counts/points)
 2. Are all mentioned issue keys valid? (check against VALID ISSUES list)
-3. Are issue descriptions accurate? (check against ISSUE DETAILS)
+3. Are issue informations accurate? (check against ISSUE DETAILS)
 
 Answer ONLY on this format: "YES or NO: [brief reason if NO]"`;
 
@@ -46,10 +46,10 @@ Answer ONLY on this format: "YES or NO: [brief reason if NO]"`;
     const answer = (data.response || "").trim().toUpperCase();
 
     if (
-      answer.startsWith("YES") ||
-      !answer.includes("MISMATCH") ||
-      !answer.includes("INCORRECT") ||
-      !answer.includes("WRONG") ||
+      answer.startsWith("YES") &&
+      !answer.includes("MISMATCH") &&
+      !answer.includes("INCORRECT") &&
+      !answer.includes("WRONG") &&
       !answer.includes("NOT MATCH")
     ) {
       return { pass: true, reason: "Facts verified" };

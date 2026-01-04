@@ -4,6 +4,7 @@ import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MessageBubbleProps } from "./types";
 import { IssueListCard, IssueListData } from "../IssueListCard";
+import { ActivityCard, ActivityListData } from "../ActivityCard";
 import { SprintComparisonCard } from "../SprintComparisonCard";
 import { TypingIndicator } from "../TypingIndicator";
 import { useStreamedText } from "@/hooks/useStreamedText";
@@ -95,6 +96,9 @@ export function MessageBubble({
       const issueLists = structuredData.filter(
         (data): data is IssueListData => data.type === "issue_list"
       );
+      const activityLists = structuredData.filter(
+        (data): data is ActivityListData => data.type === "activity_list"
+      );
 
       return (
         <div className="space-y-3">
@@ -113,6 +117,9 @@ export function MessageBubble({
           ) : issueLists.length > 1 ? (
             <SprintComparisonCard sprints={issueLists} />
           ) : null}
+          {activityLists.map((activity, idx) => (
+            <ActivityCard key={`activity-${idx}`} data={activity} />
+          ))}
         </div>
       );
     }
@@ -153,6 +160,8 @@ export function MessageBubble({
                   className={`cursor-default px-1.5 py-0.5 rounded text-[10px] font-medium ${
                     message.reviewResult.validating
                       ? "bg-[var(--cyan)]/20 text-[var(--cyan)] animate-pulse"
+                      : message.reviewResult.skipped
+                      ? "bg-[var(--fg-muted)]/20 text-[var(--fg-muted)]"
                       : message.reviewResult.pass
                       ? "bg-[var(--green)]/20 text-[var(--green)]"
                       : "bg-[var(--yellow)]/20 text-[var(--yellow)]"
@@ -160,15 +169,21 @@ export function MessageBubble({
                 >
                   {message.reviewResult.validating
                     ? "⏳ validating..."
+                    : message.reviewResult.skipped
+                    ? "⊘ skipped"
                     : message.reviewResult.pass
                     ? "✓ verified"
                     : "⚠ check"}
                 </span>
                 {showTooltip && !message.reviewResult.validating && (
                   <Tooltip
-                    text={`${
-                      message.reviewResult.summary || "Checked"
-                    } · See reasoning for details`}
+                    text={
+                      message.reviewResult.skipped
+                        ? "No issue data to verify"
+                        : `${
+                            message.reviewResult.summary || "Checked"
+                          } · See reasoning for details`
+                    }
                     targetRef={badgeRef}
                   />
                 )}

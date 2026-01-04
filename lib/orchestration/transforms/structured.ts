@@ -4,11 +4,32 @@
 
 import type {
   IssueListStructuredData,
+  ActivityListStructuredData,
   StructuredDataItem,
   SprintIssuesResult,
   AnalyzeCachedDataResult,
 } from "../types";
 import { TOOL_NAMES } from "../../constants";
+
+/** Result structure from get_activity tool */
+interface GetActivityResult {
+  period: { since: string; until: string };
+  filters_applied: {
+    sprint_ids: number[];
+    to_status: string | null;
+    assignees: string[] | null;
+  };
+  total_changes: number;
+  changes: Array<{
+    issue_key: string;
+    summary: string;
+    field: string;
+    from: string | null;
+    to: string | null;
+    changed_by: string;
+    changed_at: string;
+  }>;
+}
 
 /**
  * Extract structured data from analyze_cached_data result.
@@ -66,6 +87,26 @@ function extractFromSprintIssues(
 }
 
 /**
+ * Extract structured data from get_activity result.
+ */
+function extractFromActivity(
+  result: GetActivityResult
+): ActivityListStructuredData[] {
+  if (!result.changes || result.changes.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      type: "activity_list" as const,
+      period: result.period,
+      total_changes: result.total_changes,
+      changes: result.changes,
+    },
+  ];
+}
+
+/**
  * Extract structured data from tool results for UI rendering.
  * @param toolName - Name of the tool that produced the result.
  * @param result - Raw result from the tool.
@@ -83,6 +124,10 @@ export function extractStructuredData(
 
   if (toolName === TOOL_NAMES.ANALYZE_CACHED_DATA) {
     return extractFromAnalyzeCachedData(result as AnalyzeCachedDataResult);
+  }
+
+  if (toolName === TOOL_NAMES.GET_ACTIVITY) {
+    return extractFromActivity(result as GetActivityResult);
   }
 
   return [];

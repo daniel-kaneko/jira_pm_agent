@@ -22,7 +22,11 @@ export type { Message, ReasoningStep, StructuredData, SortDirection } from "./ty
 export type { CSVUploadProps } from "./CSVUpload";
 export { IssueListCard } from "./IssueListCard";
 export type { IssueListData, IssueData } from "./IssueListCard";
+export { ActivityCard } from "./ActivityCard";
+export type { ActivityListData, ActivityChange } from "./ActivityCard";
 export { SprintComparisonCard } from "./SprintComparisonCard";
+export { MultiSelectDropdown } from "./MultiSelectDropdown";
+export type { MultiSelectDropdownProps } from "./MultiSelectDropdown";
 export type { HeaderProps } from "./Header";
 export type { MessageBubbleProps } from "./MessageBubble";
 export type { ChatInputProps } from "./ChatInput";

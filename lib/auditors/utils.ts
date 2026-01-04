@@ -1,4 +1,5 @@
 import { ReviewIssue } from "../types/api";
+import { ActivityChangeForAudit } from "./types";
 
 /**
  * Build a name-to-email mapping from issues.
@@ -71,4 +72,65 @@ ${validKeys}
 
 ISSUE DETAILS:
 ${issueDetails}`;
+}
+
+/**
+ * Build a facts sheet for activity/changelog data.
+ * @param changes - Array of activity changes.
+ * @param totalChanges - Total number of changes.
+ * @param period - Date range of the activity.
+ * @returns Formatted string optimized for verification.
+ */
+export function buildActivityFactsSheet(
+  changes: ActivityChangeForAudit[],
+  totalChanges: number,
+  period?: { since: string; until: string }
+): string {
+  const byStatus: Record<string, number> = {};
+  const byPerson: Record<string, number> = {};
+  const issueKeys = new Set<string>();
+
+  for (const change of changes) {
+    issueKeys.add(change.issue_key);
+
+    if (change.field.toLowerCase() === "status" && change.to) {
+      byStatus[change.to] = (byStatus[change.to] || 0) + 1;
+    }
+
+    const name = change.changed_by.split(" ")[0];
+    byPerson[name] = (byPerson[name] || 0) + 1;
+  }
+
+  const statusLines = Object.entries(byStatus)
+    .sort((a, b) => b[1] - a[1])
+    .map(([status, count]) => `→ ${status}: ${count}`)
+    .join("\n");
+
+  const personLines = Object.entries(byPerson)
+    .sort((a, b) => b[1] - a[1])
+    .map(([person, count]) => `${person}: ${count} changes`)
+    .join("\n");
+
+  const changeDetails = changes
+    .slice(0, 30)
+    .map((c) => `${c.issue_key}: ${c.field} "${c.from || "—"}" → "${c.to || "—"}"`)
+    .join("\n");
+
+  const periodStr = period ? `Period: ${period.since} to ${period.until}` : "";
+
+  return `ACTIVITY SUMMARY:
+${periodStr}
+Total: ${totalChanges} changes across ${issueKeys.size} issues
+
+STATUS TRANSITIONS:
+${statusLines || "No status changes"}
+
+BY PERSON:
+${personLines}
+
+AFFECTED ISSUES:
+${[...issueKeys].join(", ")}
+
+CHANGE DETAILS (first 30):
+${changeDetails}`;
 }

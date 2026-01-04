@@ -1,6 +1,119 @@
 import { ToolDefinition } from "./types";
 import { TOOL_NAMES, CACHE_OPERATIONS, ANALYSIS_FIELDS } from "../constants";
 
+/**
+ * Light tool definitions for initial tool selection.
+ * These have minimal descriptions to reduce token usage.
+ * Full definitions are injected when a tool is actually called.
+ */
+export const lightTools: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.LIST_SPRINTS,
+      description: "Get sprint IDs. Call FIRST when user mentions sprints.",
+      parameters: { type: "object", properties: { state: { type: "string", description: "active/closed/all" }, limit: { type: "number", description: "max" } }, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.GET_CONTEXT,
+      description: "Get team members and statuses.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.QUERY_CSV,
+      description: "Query uploaded CSV data with filters.",
+      parameters: { type: "object", properties: { row_range: { type: "string", description: "e.g. 1-100" }, filters: { type: "object", description: "column filters" }, limit: { type: "number", description: "max rows" } }, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.GET_SPRINT_ISSUES,
+      description: "Get issues from sprints. Requires sprint_ids from list_sprints.",
+      parameters: { type: "object", properties: { sprint_ids: { type: "array", description: "sprint IDs" }, assignees: { type: "array", description: "filter by names" }, status_filters: { type: "array", description: "filter by status" } }, required: ["sprint_ids"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.GET_ISSUE,
+      description: "Get single issue details by key.",
+      parameters: { type: "object", properties: { issue_key: { type: "string", description: "e.g. PROJ-123" } }, required: ["issue_key"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.GET_ACTIVITY,
+      description: "Get status changes since a date.",
+      parameters: { type: "object", properties: { sprint_ids: { type: "array", description: "sprint IDs" }, since: { type: "string", description: "YYYY-MM-DD" }, to_status: { type: "string", description: "filter to status" } }, required: ["since"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.PREPARE_ISSUES,
+      description: "Prepare CSV rows for issue creation.",
+      parameters: { type: "object", properties: { row_range: { type: "string", description: "e.g. 1-100" }, mapping: { type: "object", description: "column mappings" } }, required: ["mapping"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.CREATE_ISSUES,
+      description: "Create issues in bulk. Requires confirmation.",
+      parameters: { type: "object", properties: { issues: { type: "array", description: "issues to create" } }, required: ["issues"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.UPDATE_ISSUES,
+      description: "Update existing issues in bulk. Requires confirmation.",
+      parameters: { type: "object", properties: { issues: { type: "array", description: "issues to update" } }, required: ["issues"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.ANALYZE_CACHED_DATA,
+      description: "Analyze previously fetched issues (count, filter, sum, group).",
+      parameters: { type: "object", properties: { operation: { type: "string", description: "count/filter/sum/group" }, field: { type: "string", description: "field to analyze" }, condition: { type: "object", description: "filter condition" } }, required: ["operation", "field"] },
+    },
+  },
+];
+
+/**
+ * Get the full tool definition for a specific tool.
+ * Used when a tool is selected and we need complete parameter info.
+ * @param toolName - Name of the tool to get.
+ * @returns Full tool definition or undefined if not found.
+ */
+export function getFullToolDefinition(toolName: string): ToolDefinition | undefined {
+  return jiraTools.find(t => t.function.name === toolName);
+}
+
+/**
+ * Get full definitions for multiple tools.
+ * @param toolNames - Array of tool names.
+ * @returns Array of full tool definitions.
+ */
+export function getFullToolDefinitions(toolNames: string[]): ToolDefinition[] {
+  return toolNames
+    .map(name => getFullToolDefinition(name))
+    .filter((t): t is ToolDefinition => t !== undefined);
+}
+
+/**
+ * Full tool definitions with detailed descriptions and examples.
+ * These are used after initial tool selection for precise execution.
+ */
 export const jiraTools: ToolDefinition[] = [
   {
     type: "function",

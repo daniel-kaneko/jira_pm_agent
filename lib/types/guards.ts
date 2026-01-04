@@ -25,6 +25,25 @@ export interface IssueListStructuredData {
   issues: IssueData[];
 }
 
+/** Activity change record */
+interface ActivityChange {
+  issue_key: string;
+  summary: string;
+  field: string;
+  from: string | null;
+  to: string | null;
+  changed_by: string;
+  changed_at: string;
+}
+
+/** Structured data for activity list display */
+export interface ActivityListStructuredData {
+  type: "activity_list";
+  period: { since: string; until: string };
+  total_changes: number;
+  changes: ActivityChange[];
+}
+
 /**
  * Type guard to check if a value is a valid IssueData object.
  * @param value - The value to check.
@@ -66,6 +85,25 @@ export function isIssueListStructuredData(
   for (let i = 0; i < samplesToCheck; i++) {
     if (!isIssueData(obj.issues[i])) return false;
   }
+
+  return true;
+}
+
+/**
+ * Type guard to check if a value is a valid ActivityListStructuredData object.
+ * @param value - The value to check.
+ * @returns True if the value matches ActivityListStructuredData structure.
+ */
+export function isActivityListStructuredData(
+  value: unknown
+): value is ActivityListStructuredData {
+  if (typeof value !== "object" || value === null) return false;
+
+  const obj = value as Record<string, unknown>;
+  if (obj.type !== "activity_list") return false;
+  if (typeof obj.total_changes !== "number") return false;
+  if (!Array.isArray(obj.changes)) return false;
+  if (typeof obj.period !== "object" || obj.period === null) return false;
 
   return true;
 }

@@ -109,16 +109,29 @@ export async function ollamaRequest(
 }
 
 /**
+ * Token usage information from Ollama response.
+ */
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+/**
  * Chat with tool support using Ollama API.
  * Auto-wakes VM if connection fails.
  * @param messages - The conversation messages.
  * @param tools - Available tool definitions.
- * @returns The LLM response with optional tool calls.
+ * @returns The LLM response with optional tool calls and token usage.
  */
 export async function chatWithTools(
   messages: ChatMessage[],
   tools: ToolDefinition[]
-): Promise<OllamaResponse> {
+): Promise<OllamaResponse & { tokenUsage?: TokenUsage }> {
+  if (!tools || tools.length === 0) {
+    throw new Error("chatWithTools called with no tools - check tool imports");
+  }
+
   const response = await ollamaRequest("/api/chat", {
     messages: messages.map((msg) => ({
       role: msg.role,
@@ -153,12 +166,22 @@ export async function chatWithTools(
     })
   );
 
+  const tokenUsage: TokenUsage | undefined =
+    data.prompt_eval_count !== undefined
+      ? {
+          promptTokens: data.prompt_eval_count || 0,
+          completionTokens: data.eval_count || 0,
+          totalTokens: (data.prompt_eval_count || 0) + (data.eval_count || 0),
+        }
+      : undefined;
+
   return {
     message: {
       role: data.message?.role || "assistant",
       content: data.message?.content || "",
       tool_calls: toolCalls,
     },
+    tokenUsage,
   };
 }
 
@@ -210,9 +233,21 @@ Reply with just A or B:`;
   }
 }
 
+/**
+ * Stream chunk type - either content or token usage info.
+ */
+export type StreamChunk =
+  | { type: "content"; content: string }
+  | { type: "tokens"; usage: TokenUsage };
+
+/**
+ * Stream chat response from Ollama API with token tracking.
+ * @param messages - The conversation messages.
+ * @yields Content chunks and final token usage.
+ */
 export async function* streamChat(
   messages: ChatMessage[]
-): AsyncGenerator<string> {
+): AsyncGenerator<StreamChunk> {
   const response = await ollamaRequest("/api/chat", {
     messages: messages.map((msg) => ({
       role: msg.role,
@@ -246,9 +281,22 @@ export async function* streamChat(
         try {
           const parsed = JSON.parse(line);
           if (parsed.message?.content) {
-            yield parsed.message.content;
+            yield { type: "content", content: parsed.message.content };
           }
-          if (parsed.done) return;
+          if (parsed.done) {
+            if (parsed.prompt_eval_count !== undefined) {
+              yield {
+                type: "tokens",
+                usage: {
+                  promptTokens: parsed.prompt_eval_count || 0,
+                  completionTokens: parsed.eval_count || 0,
+                  totalTokens:
+                    (parsed.prompt_eval_count || 0) + (parsed.eval_count || 0),
+                },
+              };
+            }
+            return;
+          }
         } catch {
           console.error("Error parsing JSON:", line);
         }

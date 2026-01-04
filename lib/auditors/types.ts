@@ -16,6 +16,7 @@ export interface FilterAuditorInput {
   appliedFilters?: AppliedFilters;
   sprintName?: string;
   assigneeMap?: Record<string, string>;
+  toolUsed?: string;
 }
 
 /**
@@ -40,6 +41,18 @@ export interface AggregatedAuditResult {
 }
 
 /**
+ * Activity change record for auditing.
+ */
+export interface ActivityChangeForAudit {
+  issue_key: string;
+  summary: string;
+  field: string;
+  from: string | null;
+  to: string | null;
+  changed_by: string;
+}
+
+/**
  * Full context available for auditing.
  */
 export interface AuditContext {
@@ -50,5 +63,9 @@ export interface AuditContext {
   totalPoints?: number;
   issues?: ReviewIssue[];
   sprintName?: string;
+  activityChanges?: ActivityChangeForAudit[];
+  changeCount?: number;
+  activityPeriod?: { since: string; until: string };
+  toolUsed?: string;
 }
 

@@ -1,74 +1,96 @@
 import { ollamaRequest } from "../ollama";
 import { AuditorResult, FilterAuditorInput } from "./types";
+import { AppliedFilters } from "../types/api";
 
-const TOOL_TYPINGS = `TOOL TYPINGS:
+const TOOL_SPECS: Record<string, string> = {
+  get_sprint_issues: `get_sprint_issues(sprint_ids: number[], assignees?: string[], status_filters?: string[])
+→ No assignees = ALL, No status_filters = ALL`,
+  get_activity: `get_activity(since: string, assignees?: string[], to_status?: string)
+→ No assignees = ALL, No to_status = ALL status changes`,
+};
 
-get_sprint_issues(sprint_ids: number[], assignees?: string[], status_filters?: string[], keyword?: string)
-→ Returns: { total_issues, total_story_points, sprints: { [name]: { issues: [{ key, summary, status, assignee, story_points }] } } }
-→ No assignees param = ALL assignees
-→ No status_filters param = ALL statuses
+function buildFilterLines(
+  filters: AppliedFilters,
+  tool: string,
+  ctx: { sprintName?: string; assigneeMap?: Record<string, string> }
+): string[] {
+  const lines: string[] = [];
 
-get_activity(since: string, sprint_ids?: number[], assignees?: string[], to_status?: string)
-→ Returns: { period, changes: [{ issue_key, summary, field, from, to, changed_by, changed_at }] }
-→ No assignees param = ALL assignees
-→ No to_status param = ALL status changes`;
+  if (filters.assignees?.length) {
+    const display = ctx.assigneeMap
+      ? Object.entries(ctx.assigneeMap)
+          .map(([n, e]) => `${n} (${e})`)
+          .join(", ")
+      : filters.assignees.join(", ");
+    lines.push(`assignees: [${display}]`);
+  } else {
+    lines.push("assignees: ALL");
+  }
+
+  if (tool === "get_sprint_issues") {
+    if (filters.sprintIds?.length) {
+      lines.push(
+        `sprint: ${ctx.sprintName || `ID ${filters.sprintIds.join(", ")}`}`
+      );
+    }
+    if (filters.statusFilters?.length) {
+      lines.push(`status_filters: [${filters.statusFilters.join(", ")}]`);
+    } else {
+      lines.push("status_filters: ALL");
+    }
+  }
+
+  if (tool === "get_activity") {
+    if (filters.since) {
+      lines.push(`since: ${filters.since}`);
+    }
+    if (filters.toStatus) {
+      lines.push(`to_status: ${filters.toStatus}`);
+    } else {
+      lines.push("to_status: ALL");
+    }
+  }
+
+  return lines;
+}
 
 /**
  * Auditor that checks if the AI applied correct filters based on user's question.
- * Focused only on filter validation - nothing else.
- * @param input - User question, applied filters, and human-readable context.
+ * @param input - User question, applied filters, and context.
  * @returns Pass/fail result with reason.
  */
 export async function filterAuditor(
   input: FilterAuditorInput
 ): Promise<AuditorResult> {
-  const { userQuestion, appliedFilters, sprintName, assigneeMap } = input;
+  const { userQuestion, appliedFilters, sprintName, assigneeMap, toolUsed } =
+    input;
 
-  if (!appliedFilters) {
+  if (!appliedFilters || !toolUsed) {
     return { pass: true, reason: "No filters to check" };
   }
 
-  const filterLines: string[] = [];
+  const toolSpec = TOOL_SPECS[toolUsed] || "";
+  const filterLines = buildFilterLines(appliedFilters, toolUsed, {
+    sprintName,
+    assigneeMap,
+  });
+  const today = new Date().toISOString().split("T")[0];
 
-  if (appliedFilters.assignees?.length) {
-    const assignees = assigneeMap
-      ? Object.entries(assigneeMap)
-          .map(([name, email]) => `${name} (${email})`)
-          .join(", ")
-      : appliedFilters.assignees.join(", ");
-    filterLines.push(`assignees: [${assignees}]`);
-  } else {
-    filterLines.push("assignees: undefined (returns ALL)");
-  }
+  const prompt = `Today: ${today}
 
-  if (appliedFilters.sprintIds?.length) {
-    const sprint = sprintName || `ID ${appliedFilters.sprintIds.join(", ")}`;
-    filterLines.push(`sprint: ${sprint}`);
-  } else {
-    filterLines.push("sprint: none");
-  }
-
-  if (appliedFilters.statusFilters?.length) {
-    filterLines.push(
-      `status_filters: [${appliedFilters.statusFilters.join(", ")}]`
-    );
-  } else {
-    filterLines.push("status_filters: undefined (returns ALL)");
-  }
-
-  const prompt = `${TOOL_TYPINGS}
+Tool: ${toolUsed}
+${toolSpec}
 
 Q: "${userQuestion}"
-Filters used: ${filterLines.join(", ")}
+Filters: ${filterLines.join(", ")}
 
-Can the question be answered with these filters?
-Answer: YES or NO: [missing filter]`;
+Can this answer the question? YES or NO: [why]`;
 
   try {
     const response = await ollamaRequest("/api/generate", {
       prompt,
       stream: false,
-      options: { num_predict: 40, temperature: 0 },
+      options: { num_predict: 60, temperature: 0 },
     });
 
     if (!response.ok) {

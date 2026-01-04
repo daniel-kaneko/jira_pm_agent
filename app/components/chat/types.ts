@@ -4,6 +4,7 @@
  */
 
 import type { IssueListData } from "./IssueListCard";
+import type { ActivityListData } from "./ActivityCard";
 import type { ReviewResult } from "@/lib/types";
 
 /**
@@ -22,7 +23,7 @@ export interface ReasoningStep {
 /**
  * Structured data types that can be rendered as components
  */
-export type StructuredData = IssueListData;
+export type StructuredData = IssueListData | ActivityListData;
 
 export type { ReviewResult };
 

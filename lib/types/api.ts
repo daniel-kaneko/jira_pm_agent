@@ -63,6 +63,7 @@ export interface StreamEvent {
   pass?: boolean;
   reason?: string;
   summary?: string;
+  skipped?: boolean;
 }
 
 export interface ToolResponse {
@@ -94,6 +95,8 @@ export interface AppliedFilters {
   assignees?: string[];
   sprintIds?: number[];
   statusFilters?: string[];
+  since?: string;
+  toStatus?: string;
 }
 
 export interface ReviewResult {
@@ -101,5 +104,6 @@ export interface ReviewResult {
   reason?: string;
   summary?: string;
   validating?: boolean;
+  skipped?: boolean;
 }
 

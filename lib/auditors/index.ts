@@ -2,7 +2,11 @@ import { ReviewResult } from "../types/api";
 import { filterAuditor } from "./filterAuditor";
 import { factsAuditor } from "./factsAuditor";
 import { AuditContext } from "./types";
-import { buildAssigneeMap, buildFactsSheet } from "./utils";
+import {
+  buildAssigneeMap,
+  buildFactsSheet,
+  buildActivityFactsSheet,
+} from "./utils";
 
 export type { AuditContext } from "./types";
 
@@ -18,8 +22,16 @@ function buildBreakdown(ctx: AuditContext): string {
   if (ctx.totalPoints !== undefined) {
     parts.push(`${ctx.totalPoints} pts`);
   }
+  if (ctx.changeCount !== undefined) {
+    parts.push(`${ctx.changeCount} changes`);
+  }
   if (ctx.sprintName) {
     parts.push(`Sprint: ${ctx.sprintName}`);
+  }
+  if (ctx.activityPeriod) {
+    parts.push(
+      `Period: ${ctx.activityPeriod.since} to ${ctx.activityPeriod.until}`
+    );
   }
   if (ctx.issues?.length) {
     const byAssignee: Record<string, number> = {};
@@ -51,23 +63,32 @@ export async function runAuditors(
 ): Promise<ReviewResult> {
   const issueCount = ctx.issueCount ?? 0;
   const totalPoints = ctx.totalPoints ?? 0;
+  const changeCount = ctx.changeCount ?? 0;
+  const hasIssueData = ctx.issues?.length || issueCount > 0;
+  const hasActivityData = ctx.activityChanges?.length || changeCount > 0;
 
-  if (!ctx.issues?.length && issueCount === 0) {
-    return { pass: true };
+  if (!hasIssueData && !hasActivityData) {
+    return { pass: true, skipped: true };
   }
 
-  const summary = `${issueCount} issues, ${totalPoints} pts`;
+  const summary = hasActivityData
+    ? `${changeCount} changes`
+    : `${issueCount} issues, ${totalPoints} pts`;
   const breakdown = buildBreakdown(ctx);
   const assigneeData = ctx.issues?.length
     ? buildAssigneeMap(ctx.issues)
     : undefined;
 
-  if (ctx.userQuestion && ctx.appliedFilters) {
+  let auditorsRan = false;
+
+  if (ctx.userQuestion && ctx.appliedFilters && ctx.toolUsed) {
+    auditorsRan = true;
     const filterResult = await filterAuditor({
       userQuestion: ctx.userQuestion,
       appliedFilters: ctx.appliedFilters,
       sprintName: ctx.sprintName,
       assigneeMap: assigneeData?.map,
+      toolUsed: ctx.toolUsed,
     });
 
     if (!filterResult.pass) {
@@ -80,6 +101,7 @@ export async function runAuditors(
   }
 
   if (aiResponse && ctx.issues?.length) {
+    auditorsRan = true;
     const factsSheet = buildFactsSheet(ctx.issues, totalPoints);
 
     const factsResult = await factsAuditor({
@@ -94,6 +116,32 @@ export async function runAuditors(
         summary,
       };
     }
+  }
+
+  if (aiResponse && ctx.activityChanges?.length) {
+    auditorsRan = true;
+    const factsSheet = buildActivityFactsSheet(
+      ctx.activityChanges,
+      changeCount,
+      ctx.activityPeriod
+    );
+
+    const factsResult = await factsAuditor({
+      aiResponse,
+      factsSheet,
+    });
+
+    if (!factsResult.pass) {
+      return {
+        pass: false,
+        reason: `⚠ ${factsResult.reason}. ${breakdown}`,
+        summary,
+      };
+    }
+  }
+
+  if (!auditorsRan) {
+    return { pass: true, skipped: true };
   }
 
   return {

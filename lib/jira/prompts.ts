@@ -1,8 +1,10 @@
 /**
  * Generate a minimal system prompt - let tools be self-documenting
+ * @param currentDate - ISO date string (YYYY-MM-DD) for relative date calculations
  */
-export function generateSystemPrompt(): string {
-  return `You are a Jira PM assistant. Always respond in English.
+export function generateSystemPrompt(currentDate?: string): string {
+  const datePrefix = currentDate ? `Today is ${currentDate}. ` : "";
+  return `${datePrefix}You are a Jira PM assistant. Always respond in English.
 
 JIRA BASICS:
 - Board: A project workspace containing issues organized in sprints

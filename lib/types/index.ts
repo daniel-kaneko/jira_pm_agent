@@ -19,11 +19,15 @@ export type { ChatMessage, ToolCall, OllamaResponse } from "./ollama";
 export {
   isIssueData,
   isIssueListStructuredData,
+  isActivityListStructuredData,
   isPendingAction,
   hasStructuredData,
   hasConfirmationRequired,
   safeJsonParse,
 } from "./guards";
 
-export type { IssueListStructuredData } from "./guards";
+export type {
+  IssueListStructuredData,
+  ActivityListStructuredData,
+} from "./guards";
 

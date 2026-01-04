@@ -32,7 +32,28 @@ export interface IssueListStructuredData {
   issues: IssueData[];
 }
 
-export type StructuredDataItem = IssueListStructuredData;
+/** Activity change record */
+export interface ActivityChange {
+  issue_key: string;
+  summary: string;
+  field: string;
+  from: string | null;
+  to: string | null;
+  changed_by: string;
+  changed_at: string;
+}
+
+/** Structured data for activity list display */
+export interface ActivityListStructuredData {
+  type: "activity_list";
+  period: { since: string; until: string };
+  total_changes: number;
+  changes: ActivityChange[];
+}
+
+export type StructuredDataItem =
+  | IssueListStructuredData
+  | ActivityListStructuredData;
 
 /** Result from query_csv tool */
 export interface QueryCSVResult {
@@ -78,6 +99,18 @@ export interface AnalyzeCachedDataResult {
     assignee: string | null;
     story_points: number | null;
   }>;
+}
+
+/** Result from get_activity tool */
+export interface GetActivityResult {
+  period: { since: string; until: string };
+  filters_applied: {
+    sprint_ids: number[];
+    to_status: string | null;
+    assignees: string[] | null;
+  };
+  total_changes: number;
+  changes: ActivityChange[];
 }
 
 /** Input parameters for the orchestrate function */

@@ -3,16 +3,33 @@
  * Handles the agentic loop of tool calls and response generation.
  */
 
-import { chatWithTools, streamChat, classifyContext } from "../ollama";
+import {
+  chatWithTools,
+  streamChat,
+  classifyContext,
+  type TokenUsage,
+} from "../ollama";
 import { runAuditors, type AuditContext } from "../auditors";
-import { jiraTools } from "../jira";
+import { lightTools, getFullToolDefinitions, jiraTools } from "../jira";
 import { generateSystemPrompt, MAX_TOOL_ITERATIONS } from "../jira/prompts";
 import { TOOL_NAMES, WRITE_TOOLS } from "../constants";
 
-import { callTool, handleQueryCSV, handlePrepareIssues, handleAnalyzeCachedData } from "./tools";
+import {
+  callTool,
+  handleQueryCSV,
+  handlePrepareIssues,
+  handleAnalyzeCachedData,
+} from "./tools";
 import { condenseForAI, extractStructuredData } from "./transforms";
-import { summarizeHistory, extractDataContext } from "./context";
+import {
+  summarizeHistory,
+  extractDataContext,
+  compressMessages,
+} from "./context";
 import { summarizeToolResult } from "./summarize";
+
+/** Token usage warning threshold (80% of 32k context) */
+const TOKEN_WARNING_THRESHOLD = 25000;
 
 import type {
   StreamEvent,
@@ -23,6 +40,7 @@ import type {
   ExecuteActionParams,
   SprintIssuesResult,
   AnalyzeCachedDataResult,
+  GetActivityResult,
 } from "./types";
 
 export type { StreamEvent, OrchestrateParams, ExecuteActionParams };
@@ -60,11 +78,14 @@ export function createSSEStream(
 }
 
 /**
- * Stream the final answer from the LLM.
+ * Stream the final answer from the LLM with token tracking.
+ * @returns Object with content generator and final token usage.
  */
 async function* streamFinalAnswer(
   messages: ChatMessage[]
-): AsyncGenerator<string> {
+): AsyncGenerator<
+  { type: "content"; content: string } | { type: "tokens"; usage: TokenUsage }
+> {
   for await (const chunk of streamChat(messages)) {
     yield chunk;
   }
@@ -73,6 +94,7 @@ async function* streamFinalAnswer(
 /**
  * Main orchestration generator for AI-powered Jira operations.
  * Implements an agentic loop that dynamically calls tools based on LLM decisions.
+ * Uses two-phase tool loading: light definitions first, full on use.
  * @param params - Orchestration parameters.
  * @yields Stream events for real-time UI updates.
  */
@@ -88,7 +110,8 @@ export async function* orchestrate(
     useAuditor,
   } = params;
 
-  const systemPrompt = generateSystemPrompt();
+  const currentDate = new Date().toISOString().split("T")[0];
+  const systemPrompt = generateSystemPrompt(currentDate);
 
   const currentMessage = conversationHistory[conversationHistory.length - 1];
   const previousHistory = conversationHistory.slice(0, -1);
@@ -128,7 +151,7 @@ export async function* orchestrate(
         }. Use analyze_cached_data tool for follow-up questions about this data.]`
       : null;
 
-  const messages: ChatMessage[] = [
+  let messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     ...(cachedDataHint
       ? [{ role: "system" as const, content: cachedDataHint }]
@@ -147,17 +170,34 @@ export async function* orchestrate(
     })),
   ];
 
+  messages = compressMessages(messages);
+
   let iterations = 0;
   const userQuestion =
     currentMessage?.role === "user" ? currentMessage.content : undefined;
   let auditCtx: AuditContext = { userQuestion };
 
+  let totalTokens = { prompt: 0, completion: 0 };
+
+  const usedTools = new Set<string>();
+
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
 
+    const baseTools = lightTools ?? jiraTools;
+    const toolsToUse =
+      usedTools.size > 0
+        ? [...baseTools, ...getFullToolDefinitions([...usedTools])]
+        : baseTools;
+
     let response;
     try {
-      response = await chatWithTools(messages, jiraTools);
+      response = await chatWithTools(messages, toolsToUse);
+
+      if (response.tokenUsage) {
+        totalTokens.prompt += response.tokenUsage.promptTokens;
+        totalTokens.completion += response.tokenUsage.completionTokens;
+      }
     } catch (chatError) {
       console.error("[Orchestrate] chatWithTools failed:", chatError);
       yield {
@@ -173,9 +213,21 @@ export async function* orchestrate(
     if (!assistantMessage.tool_calls?.length) {
       let fullResponse = "";
       for await (const chunk of streamFinalAnswer(messages)) {
-        fullResponse += chunk;
-        yield { type: "chunk", content: chunk };
+        if (chunk.type === "content") {
+          fullResponse += chunk.content;
+          yield { type: "chunk", content: chunk.content };
+        } else if (chunk.type === "tokens") {
+          totalTokens.prompt += chunk.usage.promptTokens;
+          totalTokens.completion += chunk.usage.completionTokens;
+        }
       }
+
+      const total = totalTokens.prompt + totalTokens.completion;
+      const warning = total > TOKEN_WARNING_THRESHOLD ? " ⚠️ high usage" : "";
+      yield {
+        type: "reasoning",
+        content: `~ Tokens: ${totalTokens.prompt.toLocaleString()} in / ${totalTokens.completion.toLocaleString()} out (${total.toLocaleString()} total)${warning} ~`,
+      };
 
       yield { type: "done" };
 
@@ -186,6 +238,7 @@ export async function* orchestrate(
           pass: review.pass,
           reason: review.reason,
           summary: review.summary,
+          skipped: review.skipped,
         };
       }
 
@@ -195,6 +248,8 @@ export async function* orchestrate(
     const toolCall = assistantMessage.tool_calls[0];
     const toolName = toolCall.function.name;
     let toolArgs: Record<string, unknown> = {};
+
+    usedTools.add(toolName);
 
     const rawArgs = toolCall.function.arguments;
     if (typeof rawArgs === "string") {
@@ -207,7 +262,7 @@ export async function* orchestrate(
       toolArgs = rawArgs as Record<string, unknown>;
     }
 
-    if (WRITE_TOOLS.includes(toolName as typeof WRITE_TOOLS[number])) {
+    if (WRITE_TOOLS.includes(toolName as (typeof WRITE_TOOLS)[number])) {
       if (assistantMessage.content) {
         yield { type: "chunk", content: assistantMessage.content };
       }
@@ -323,6 +378,7 @@ export async function* orchestrate(
           totalPoints: data.total_story_points,
           issues,
           sprintName: sprintNames.join(", ") || undefined,
+          toolUsed: "get_sprint_issues",
           appliedFilters: {
             assignees: assigneesArg,
             sprintIds: sprintIdsArg,
@@ -354,6 +410,27 @@ export async function* orchestrate(
             },
           };
         }
+      } else if (toolName === TOOL_NAMES.GET_ACTIVITY) {
+        const data = toolResult as GetActivityResult;
+        auditCtx = {
+          ...auditCtx,
+          activityChanges: data.changes.map((c) => ({
+            issue_key: c.issue_key,
+            summary: c.summary,
+            field: c.field,
+            from: c.from,
+            to: c.to,
+            changed_by: c.changed_by,
+          })),
+          changeCount: data.total_changes,
+          activityPeriod: data.period,
+          toolUsed: "get_activity",
+          appliedFilters: {
+            since: data.period.since,
+            toStatus: data.filters_applied.to_status ?? undefined,
+            assignees: data.filters_applied.assignees ?? undefined,
+          },
+        };
       }
 
       const structuredDataItems = extractStructuredData(
@@ -413,8 +490,20 @@ export async function* orchestrate(
   };
 
   for await (const chunk of streamFinalAnswer(messages)) {
-    yield { type: "chunk", content: chunk };
+    if (chunk.type === "content") {
+      yield { type: "chunk", content: chunk.content };
+    } else if (chunk.type === "tokens") {
+      totalTokens.prompt += chunk.usage.promptTokens;
+      totalTokens.completion += chunk.usage.completionTokens;
+    }
   }
+
+  const total = totalTokens.prompt + totalTokens.completion;
+  const warning = total > TOKEN_WARNING_THRESHOLD ? " ⚠️ high usage" : "";
+  yield {
+    type: "reasoning",
+    content: `~ Tokens: ${totalTokens.prompt.toLocaleString()} in / ${totalTokens.completion.toLocaleString()} out (${total.toLocaleString()} total)${warning} ~`,
+  };
 
   yield { type: "done" };
 }
@@ -495,4 +584,3 @@ export async function* executeDirectAction(
     yield { type: "done" };
   }
 }
-

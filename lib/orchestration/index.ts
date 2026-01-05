@@ -9,7 +9,7 @@ import {
   classifyContext,
   type TokenUsage,
 } from "../ollama";
-import { runAuditors, type AuditContext } from "../auditors";
+import { runAuditors, mutationAuditor, type AuditContext } from "../auditors";
 import { lightTools, getFullToolDefinitions, jiraTools } from "../jira";
 import { generateSystemPrompt, MAX_TOOL_ITERATIONS } from "../jira/prompts";
 import { TOOL_NAMES, WRITE_TOOLS } from "../constants";
@@ -111,8 +111,6 @@ export async function* orchestrate(
     useAuditor,
   } = params;
 
-  const systemPrompt = generateSystemPrompt(getLocalToday(), getLocalTimezone());
-
   const currentMessage = conversationHistory[conversationHistory.length - 1];
   const previousHistory = conversationHistory.slice(0, -1);
 
@@ -121,25 +119,49 @@ export async function* orchestrate(
   let dataContextHint: string | null = null;
   let startingFresh = false;
 
+  const csvContextKeywords = [
+    "csv",
+    "row",
+    "rows",
+    "file",
+    "spreadsheet",
+    "upload",
+    "column",
+  ];
+  const userMentionsCsv = currentMessage?.content
+    ? csvContextKeywords.some((kw) =>
+        currentMessage.content.toLowerCase().includes(kw)
+      )
+    : false;
+  const hasCsvLoaded = csvData && csvData.length > 0;
+
   if (previousHistory.length > 0 && currentMessage?.role === "user") {
-    const summary = summarizeHistory(previousHistory);
+    if (userMentionsCsv && hasCsvLoaded) {
+      dataContextHint = extractDataContext(previousHistory);
+      yield {
+        type: "reasoning",
+        content: "→ Continuing CSV context",
+      };
+    } else {
+      const summary = summarizeHistory(previousHistory);
 
-    if (summary) {
-      const decision = await classifyContext(currentMessage.content, summary);
+      if (summary) {
+        const decision = await classifyContext(currentMessage.content, summary);
 
-      if (decision === "fresh") {
-        yield {
-          type: "reasoning",
-          content: "↻ New task detected, starting fresh",
-        };
-        effectiveHistory = [currentMessage];
-        startingFresh = true;
-      } else {
-        dataContextHint = extractDataContext(previousHistory);
-        yield {
-          type: "reasoning",
-          content: "→ Continuing previous context",
-        };
+        if (decision === "fresh") {
+          yield {
+            type: "reasoning",
+            content: "↻ New task detected, starting fresh",
+          };
+          effectiveHistory = [currentMessage];
+          startingFresh = true;
+        } else {
+          dataContextHint = extractDataContext(previousHistory);
+          yield {
+            type: "reasoning",
+            content: "→ Continuing previous context",
+          };
+        }
       }
     }
   }
@@ -151,8 +173,41 @@ export async function* orchestrate(
         }. Use analyze_cached_data tool for follow-up questions about this data.]`
       : null;
 
+  let iterations = 0;
+  const userQuestion =
+    currentMessage?.role === "user" ? currentMessage.content : undefined;
+  let auditCtx: AuditContext = { userQuestion };
+
+  const csvToolNames: string[] = [
+    TOOL_NAMES.QUERY_CSV,
+    TOOL_NAMES.PREPARE_ISSUES,
+  ];
+  const hasCsvData = csvData && csvData.length > 0;
+  const csvKeywords = [
+    "csv",
+    "spreadsheet",
+    "file",
+    "import",
+    "rows",
+    "upload",
+  ];
+  const userMessageLower = userQuestion?.toLowerCase() || "";
+  const userWantsCsv = csvKeywords.some((kw) => userMessageLower.includes(kw));
+  const includeCsvTools = hasCsvData && userWantsCsv;
+
+  const systemPrompt = generateSystemPrompt(
+    getLocalToday(),
+    getLocalTimezone(),
+    includeCsvTools
+  );
+
+  const csvHint = includeCsvTools
+    ? `[CSV AVAILABLE: ${csvData?.length} rows. Use prepare_issues to create issues from the uploaded CSV data.]`
+    : null;
+
   let messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
+    ...(csvHint ? [{ role: "system" as const, content: csvHint }] : []),
     ...(cachedDataHint
       ? [{ role: "system" as const, content: cachedDataHint }]
       : []),
@@ -172,23 +227,27 @@ export async function* orchestrate(
 
   messages = compressMessages(messages);
 
-  let iterations = 0;
-  const userQuestion =
-    currentMessage?.role === "user" ? currentMessage.content : undefined;
-  let auditCtx: AuditContext = { userQuestion };
-
   let totalTokens = { prompt: 0, completion: 0 };
 
   const usedTools = new Set<string>();
+
+  const writeToolNames = WRITE_TOOLS as string[];
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
 
     const baseTools = lightTools ?? jiraTools;
-    const toolsToUse =
-      usedTools.size > 0
-        ? [...baseTools, ...getFullToolDefinitions([...usedTools])]
-        : baseTools;
+    const filteredBaseTools = includeCsvTools
+      ? baseTools
+      : baseTools.filter((t) => !csvToolNames.includes(t.function.name));
+    const nonWriteTools = filteredBaseTools.filter(
+      (t) => !writeToolNames.includes(t.function.name)
+    );
+    const fullToolsNeeded = [...new Set([...writeToolNames, ...usedTools])];
+    const toolsToUse = [
+      ...nonWriteTools,
+      ...getFullToolDefinitions(fullToolsNeeded),
+    ];
 
     let response;
     try {
@@ -283,6 +342,27 @@ export async function* orchestrate(
       const actionId = crypto.randomUUID();
       const issues = (toolArgs.issues as Array<Record<string, unknown>>) || [];
 
+      let auditResult: { pass: boolean; reason?: string } | undefined;
+      if (useAuditor && userQuestion) {
+        yield {
+          type: "reasoning",
+          content: "🔍 Auditing mutation arguments...",
+        };
+
+        auditResult = await mutationAuditor({
+          userRequest: userQuestion,
+          toolName,
+          toolArgs,
+        });
+
+        yield {
+          type: auditResult.pass ? "reasoning" : "warning",
+          content: auditResult.pass
+            ? `🔍 Auditor: ✓ ${auditResult.reason || "Arguments match request"}`
+            : `🔍 Auditor: ⚠ ${auditResult.reason || "Argument mismatch"}`,
+        };
+      }
+
       yield {
         type: "confirmation_required",
         pendingAction: {
@@ -304,6 +384,7 @@ export async function* orchestrate(
             due_date: issue.due_date as string | undefined,
             parent_key: issue.parent_key as string | undefined,
           })),
+          auditResult,
         },
       };
 
@@ -451,7 +532,11 @@ export async function* orchestrate(
         tool_calls: assistantMessage.tool_calls,
       });
 
-      const condensedResult = await condenseForAI(toolName, toolResult, toolArgs);
+      const condensedResult = await condenseForAI(
+        toolName,
+        toolResult,
+        toolArgs
+      );
       messages.push({
         role: "tool",
         tool_call_id: toolCall.id,

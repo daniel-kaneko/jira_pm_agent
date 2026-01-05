@@ -1,14 +1,16 @@
 import { ReviewResult } from "../types/api";
 import { filterAuditor } from "./filterAuditor";
 import { factsAuditor } from "./factsAuditor";
-import { AuditContext } from "./types";
+import { AuditContext, MutationAuditorInput, MutationAuditResult } from "./types";
 import {
   buildAssigneeMap,
   buildFactsSheet,
   buildActivityFactsSheet,
 } from "./utils";
+import { mutationAuditor } from "./mutationAuditor";
 
-export type { AuditContext } from "./types";
+export type { AuditContext, MutationAuditorInput, MutationAuditResult } from "./types";
+export { mutationAuditor };
 
 /**
  * Build a detailed breakdown string from audit context.

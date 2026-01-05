@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { ChatInputProps } from "./types";
 
 /**
@@ -20,6 +20,12 @@ export function ChatInput({
   leftActions,
 }: ChatInputProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!value && inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
+  }, [value]);
 
   const handleKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key !== "Enter" || e.shiftKey) return;

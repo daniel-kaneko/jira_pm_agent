@@ -45,5 +45,7 @@ export interface EventHandlerContext {
   refs: ChatRefs;
   callbacks: StreamCallbacks;
   assistantContent: { current: string };
+  hasPendingAction?: boolean;
+  pendingAuditResult?: { pass: boolean; reason?: string };
 }
 

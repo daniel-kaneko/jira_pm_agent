@@ -17,6 +17,11 @@ export interface CachedData {
   sprintName?: string;
 }
 
+export interface MutationAuditResult {
+  pass: boolean;
+  reason?: string;
+}
+
 export interface PendingAction {
   id: string;
   toolName: "create_issues" | "update_issues";
@@ -36,6 +41,7 @@ export interface PendingAction {
     due_date?: string;
     parent_key?: string;
   }>;
+  auditResult?: MutationAuditResult;
 }
 
 export interface ExecuteActionPayload {

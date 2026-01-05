@@ -213,7 +213,7 @@ export function MessageBubble({
                           : step.type === "tool_result"
                           ? "text-[var(--green)] opacity-70"
                           : step.type === "warning"
-                          ? "text-[var(--yellow)] opacity-80"
+                          ? "text-[var(--yellow)]"
                           : "text-[var(--fg-muted)] opacity-50 italic"
                       }`}
                     >

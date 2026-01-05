@@ -56,7 +56,10 @@ export function computeAvailableFilters(
  * @param maxRows - Maximum valid row number.
  * @returns Array of row indices or null if invalid.
  */
-export function parseRowRange(rangeStr: string, maxRows: number): number[] | null {
+export function parseRowRange(
+  rangeStr: string,
+  maxRows: number
+): number[] | null {
   const match = rangeStr.match(/^(\d+)-(\d+)$/);
   if (!match) return null;
 
@@ -256,23 +259,32 @@ export function handlePrepareIssues(
   }
 
   const columns = Object.keys(csvData[0]);
-  const summaryColumnInput = mapping.summary_column as string | undefined;
-  const descriptionColumnInput = mapping.description_column as
+  const summaryColumnInput = (mapping.summary_column || mapping.summary) as
     | string
     | undefined;
+  const descriptionColumnInput = (mapping.description_column ||
+    mapping.description) as string | undefined;
   const assignee = mapping.assignee as string | undefined;
-  const storyPoints = mapping.story_points as number | undefined;
-  const sprintId = mapping.sprint_id as number | undefined;
-  const issueType = (mapping.issue_type as string) || TOOL_DEFAULTS.ISSUE_TYPE;
+  const storyPoints = (mapping.story_points || mapping.storyPoints) as
+    | number
+    | undefined;
+  const sprintId = (mapping.sprint_id || mapping.sprintId) as
+    | number
+    | undefined;
+  const issueType =
+    ((mapping.issue_type || mapping.issueType) as string) ||
+    TOOL_DEFAULTS.ISSUE_TYPE;
   const priority = mapping.priority as string | undefined;
   const labels = mapping.labels as string[] | undefined;
-  const fixVersionsInput = mapping.fix_versions as
+  const fixVersionsInput = (mapping.fix_versions || mapping.fixVersions) as
     | string
     | string[]
     | undefined;
   const components = mapping.components as string[] | undefined;
-  const dueDate = mapping.due_date as string | undefined;
-  const parentKey = mapping.parent_key as string | undefined;
+  const dueDate = (mapping.due_date || mapping.dueDate) as string | undefined;
+  const parentKey = (mapping.parent_key || mapping.parentKey) as
+    | string
+    | undefined;
 
   if (!summaryColumnInput) {
     return {
@@ -362,4 +374,3 @@ export function handlePrepareIssues(
     errors,
   };
 }
-

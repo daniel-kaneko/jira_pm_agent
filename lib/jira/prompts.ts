@@ -2,10 +2,35 @@
  * Generate a minimal system prompt - let tools be self-documenting
  * @param currentDate - ISO date string (YYYY-MM-DD) for relative date calculations
  * @param timezone - IANA timezone string (e.g., "America/Sao_Paulo")
+ * @param includeCsvTools - Whether CSV tools are available
  */
-export function generateSystemPrompt(currentDate?: string, timezone?: string): string {
+export function generateSystemPrompt(
+  currentDate?: string,
+  timezone?: string,
+  includeCsvTools?: boolean
+): string {
   const tzInfo = timezone ? ` (${timezone})` : "";
   const datePrefix = currentDate ? `Today is ${currentDate}${tzInfo}. ` : "";
+
+  const csvTools = includeCsvTools
+    ? `- query_csv: Explore CSV data (for viewing, NOT for bulk creation)
+- prepare_issues: Prepare issues from CSV rows for creation`
+    : "";
+
+  const csvWorkflow = includeCsvTools
+    ? `
+
+BULK CREATION WORKFLOW (e.g. "create from rows 100-200"):
+1. Call prepare_issues with row_range: "100-200" and mapping
+2. IMMEDIATELY call create_issues with the prepared issues
+3. Do NOT call query_csv first - go directly to prepare_issues
+
+CRITICAL: After prepare_issues succeeds, you MUST call create_issues in the same turn. Do not stop or summarize.
+
+Important:
+- For row ranges, ALWAYS use row_range: "X-Y" format (e.g. "1-100", "100-200")`
+    : "";
+
   return `${datePrefix}You are a Jira PM assistant. Always respond in English.
 
 JIRA BASICS:
@@ -28,19 +53,9 @@ Key tools:
 - get_context: Get team members and statuses  
 - get_sprint_issues: Get issues from sprints (requires sprint IDs from list_sprints)
 - analyze_cached_data: Analyze previously fetched issues (count, filter, sum, group by story_points/status/assignee)
-- query_csv: Explore CSV data (for viewing, NOT for bulk creation)
-- prepare_issues: Prepare issues from CSV rows for creation
+${csvTools}
 - create_issues: Create issues in Jira (system shows confirmation UI)
-
-BULK CREATION WORKFLOW (e.g. "create from rows 100-200"):
-1. Call prepare_issues with row_range: "100-200" and mapping
-2. IMMEDIATELY call create_issues with the prepared issues
-3. Do NOT call query_csv first - go directly to prepare_issues
-
-CRITICAL: After prepare_issues succeeds, you MUST call create_issues in the same turn. Do not stop or summarize.
-
-Important:
-- For row ranges, ALWAYS use row_range: "X-Y" format (e.g. "1-100", "100-200")
+${csvWorkflow}
 - When referencing Issue IDs, hyperlink to the issue in Jira`;
 }
 

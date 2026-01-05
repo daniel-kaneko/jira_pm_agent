@@ -69,3 +69,20 @@ export interface AuditContext {
   toolUsed?: string;
 }
 
+/**
+ * Input data for the mutation auditor.
+ */
+export interface MutationAuditorInput {
+  userRequest: string;
+  toolName: string;
+  toolArgs: Record<string, unknown>;
+}
+
+/**
+ * Result from mutation audit with additional context.
+ */
+export interface MutationAuditResult {
+  pass: boolean;
+  reason?: string;
+}
+

@@ -2,7 +2,11 @@
  * Event handlers for SSE stream processing
  */
 
-import type { Message, ReasoningStep, PendingAction } from "@/app/components/chat";
+import type {
+  Message,
+  ReasoningStep,
+  PendingAction,
+} from "@/app/components/chat";
 import type { StreamEvent, CachedIssue } from "@/lib/types";
 import {
   isIssueListStructuredData,
@@ -133,14 +137,18 @@ function handleStructuredData(
  */
 function handleConfirmationRequired(
   event: StreamEvent,
-  { callbacks }: EventHandlerContext
+  ctx: EventHandlerContext
 ): void {
+  const { callbacks } = ctx;
   if (event.pendingAction && isPendingAction(event.pendingAction)) {
-    callbacks.setPendingAction(event.pendingAction as PendingAction);
+    const pendingAction = event.pendingAction as PendingAction;
+    callbacks.setPendingAction(pendingAction);
     callbacks.addReasoningStep({
       type: "thinking",
       content: "⏸ Waiting for confirmation...",
     });
+    ctx.hasPendingAction = true;
+    ctx.pendingAuditResult = pendingAction.auditResult;
   }
 }
 
@@ -152,7 +160,14 @@ function handleDone(
   ctx: EventHandlerContext,
   useAuditor: boolean
 ): void {
-  const { assistantId, refs, callbacks, assistantContent } = ctx;
+  const {
+    assistantId,
+    refs,
+    callbacks,
+    assistantContent,
+    hasPendingAction,
+    pendingAuditResult,
+  } = ctx;
 
   const finalMessage: Message = {
     id: assistantId,
@@ -167,15 +182,29 @@ function handleDone(
         : undefined,
   };
 
-  const messageWithValidating = useAuditor
-    ? { ...finalMessage, reviewResult: { pass: true, validating: true } }
-    : finalMessage;
+  let messageWithReview = finalMessage;
 
-  refs.messages.current = [...refs.messages.current, messageWithValidating];
+  if (hasPendingAction && pendingAuditResult) {
+    messageWithReview = {
+      ...finalMessage,
+      reviewResult: {
+        pass: pendingAuditResult.pass,
+        reason: pendingAuditResult.reason,
+        validating: false,
+      },
+    };
+  } else if (useAuditor && !hasPendingAction) {
+    messageWithReview = {
+      ...finalMessage,
+      reviewResult: { pass: true, validating: true },
+    };
+  }
+
+  refs.messages.current = [...refs.messages.current, messageWithReview];
 
   callbacks.setMessages((prevMessages) =>
     prevMessages.map((msg) =>
-      msg.id === assistantId ? messageWithValidating : msg
+      msg.id === assistantId ? messageWithReview : msg
     )
   );
 }
@@ -276,9 +305,10 @@ export function processStreamEvent(
 /**
  * Parse SSE lines from buffer and return events
  */
-export function parseSSELines(
-  buffer: string
-): { events: StreamEvent[]; remaining: string } {
+export function parseSSELines(buffer: string): {
+  events: StreamEvent[];
+  remaining: string;
+} {
   const lines = buffer.split("\n");
   const remaining = lines.pop() || "";
   const events: StreamEvent[] = [];
@@ -300,4 +330,3 @@ export function parseSSELines(
 
   return { events, remaining };
 }
-

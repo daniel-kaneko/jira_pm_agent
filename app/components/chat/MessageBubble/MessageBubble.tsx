@@ -68,6 +68,8 @@ export function MessageBubble({
   message,
   isThinking = false,
   isStreaming = false,
+  isLastAssistant = false,
+  onRetry,
 }: MessageBubbleProps) {
   const [showReasoning, setShowReasoning] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -188,6 +190,15 @@ export function MessageBubble({
                   />
                 )}
               </>
+            )}
+            {isLastAssistant && onRetry && !isThinking && !isStreaming && (
+              <button
+                onClick={onRetry}
+                className="cursor-pointer ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--fg-muted)]/10 hover:bg-[var(--fg-muted)]/20 text-[var(--fg-muted)] hover:text-[var(--fg)] transition-colors"
+                title="Retry this response"
+              >
+                ↻ retry
+              </button>
             )}
           </div>
           {renderContent()}

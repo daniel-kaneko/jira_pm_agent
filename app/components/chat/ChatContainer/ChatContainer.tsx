@@ -45,6 +45,7 @@ export function ChatContainer() {
     setCSVData,
     setConfigId,
     clearChat,
+    retryLastMessage,
   } = useChatContext();
   const { csvData } = useCSV();
   const { selectedConfig } = useJiraConfig();
@@ -261,22 +262,33 @@ export function ChatContainer() {
             )
           ) : (
             <div>
-              {messages.map((message, index) => {
-                const isLastMessage = index === messages.length - 1;
-                const isAssistant = message.role === "assistant";
-                const showThinking =
-                  isLoading && isLastMessage && reasoning.length === 0;
-                const isCurrentlyStreaming =
-                  isLoading && isLastMessage && isAssistant;
-                return (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    isThinking={showThinking}
-                    isStreaming={isCurrentlyStreaming}
-                  />
-                );
-              })}
+              {(() => {
+                const lastAssistantIdx = messages
+                  .map((m, i) => ({ msg: m, idx: i }))
+                  .filter((x) => x.msg.role === "assistant")
+                  .pop()?.idx;
+
+                return messages.map((message, index) => {
+                  const isLastMessage = index === messages.length - 1;
+                  const isAssistant = message.role === "assistant";
+                  const showThinking =
+                    isLoading && isLastMessage && reasoning.length === 0;
+                  const isCurrentlyStreaming =
+                    isLoading && isLastMessage && isAssistant;
+                  const isLastAssistant =
+                    index === lastAssistantIdx && !isLoading && !pendingAction;
+                  return (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      isThinking={showThinking}
+                      isStreaming={isCurrentlyStreaming}
+                      isLastAssistant={isLastAssistant}
+                      onRetry={isLastAssistant ? retryLastMessage : undefined}
+                    />
+                  );
+                });
+              })()}
               {isLoading && reasoning.length > 0 && (
                 <ReasoningDisplay steps={reasoning} />
               )}

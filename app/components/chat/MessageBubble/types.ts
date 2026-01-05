@@ -15,4 +15,8 @@ export interface MessageBubbleProps {
   isThinking?: boolean;
   /** Whether the message is currently being streamed */
   isStreaming?: boolean;
+  /** Whether this is the last assistant message (shows retry button) */
+  isLastAssistant?: boolean;
+  /** Callback to retry the last message */
+  onRetry?: () => void;
 }

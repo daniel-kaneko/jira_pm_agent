@@ -383,6 +383,88 @@ export function useChat() {
     setReasoning([]);
   }, []);
 
+  const retryLastMessage = useCallback(async () => {
+    if (isLoading) return;
+
+    const lastAssistantIdx = refs.messages.current
+      .map((m, i) => ({ msg: m, idx: i }))
+      .filter((x) => x.msg.role === "assistant")
+      .pop()?.idx;
+
+    if (lastAssistantIdx === undefined) return;
+
+    const messagesWithoutLast = refs.messages.current.filter(
+      (_, idx) => idx !== lastAssistantIdx
+    );
+    refs.messages.current = messagesWithoutLast;
+    setMessages(messagesWithoutLast);
+
+    const assistantId = crypto.randomUUID();
+    setIsLoading(true);
+    refs.reasoning.current = [];
+    setReasoning([]);
+    refs.structuredData.current = [];
+    refs.cachedData.current = null;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      },
+    ]);
+
+    try {
+      const recentMessages = messagesWithoutLast.slice(-6);
+      const historyForApi = recentMessages.map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.apiContent || msg.content,
+      }));
+
+      refs.lastMessages.current = historyForApi;
+
+      const requestBody: Record<string, unknown> = {
+        messages: historyForApi,
+        stream: true,
+      };
+
+      if (refs.csvData.current) requestBody.csvData = refs.csvData.current;
+      if (refs.configId.current) requestBody.configId = refs.configId.current;
+
+      const useAuditor = localStorage.getItem("useAuditor") === "true";
+      refs.useAuditor.current = useAuditor;
+      if (useAuditor) requestBody.useAuditor = true;
+
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      await processStream(reader, assistantId, useAuditor);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to retry message";
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === assistantId
+            ? { ...msg, content: `Error: ${errorMessage}` }
+            : msg
+        )
+      );
+    } finally {
+      setIsLoading(false);
+      setReasoning([]);
+    }
+  }, [isLoading, processStream]);
+
   return {
     messages,
     isLoading,
@@ -394,5 +476,6 @@ export function useChat() {
     setConfigId,
     confirmAction,
     cancelAction,
+    retryLastMessage,
   };
 }

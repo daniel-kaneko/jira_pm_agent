@@ -5,9 +5,11 @@ import { getLocalToday } from "../utils/dates";
 
 const TOOL_SPECS: Record<string, string> = {
   get_sprint_issues: `get_sprint_issues(sprint_ids: number[], assignees?: string[], status_filters?: string[])
-→ No assignees = ALL, No status_filters = ALL`,
+→ Returns: { issues: Issue[], total_issues: number, total_story_points: number, sprints: { [name]: count } }
+→ Defaults: No assignees = ALL, No status_filters = ALL`,
   get_activity: `get_activity(since: string, assignees?: string[], to_status?: string)
-→ No assignees = ALL, No to_status = ALL status changes`,
+→ Returns: { changes: StatusChange[], total_changes: number, period: { since, until } }
+→ Defaults: No assignees = ALL, No to_status = ALL status changes`,
 };
 
 function buildFilterLines(
@@ -30,9 +32,11 @@ function buildFilterLines(
 
   if (tool === "get_sprint_issues") {
     if (filters.sprintIds?.length) {
-      lines.push(
-        `sprint: ${ctx.sprintName || `ID ${filters.sprintIds.join(", ")}`}`
-      );
+      const idStr = filters.sprintIds.join(", ");
+      const displayName = ctx.sprintName
+        ? `${ctx.sprintName} (ID: ${idStr})`
+        : `ID ${idStr}`;
+      lines.push(`sprint: ${displayName}`);
     }
     if (filters.statusFilters?.length) {
       lines.push(`status_filters: [${filters.statusFilters.join(", ")}]`);

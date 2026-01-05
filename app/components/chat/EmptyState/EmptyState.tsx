@@ -5,7 +5,7 @@ export function EmptyState() {
   return (
     <div className="py-8 text-[var(--fg-muted)]">
       <div className="space-y-1">
-        <p className="text-[var(--fg)]">jira-pm-agent v0.1.0</p>
+        <p className="text-[var(--fg)]">jira-pm-agent v1.0.0</p>
         <p>&nbsp;</p>
         <p>
           type a question and press{" "}

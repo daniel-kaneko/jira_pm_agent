@@ -12,15 +12,16 @@ AI-powered assistant for Jira project management. Built with Next.js, Ollama, an
 - 🔍 Smart search across sprints, assignees, and statuses
 - 📊 Sprint comparison and productivity analysis
 - 📋 Interactive issue tables with filtering, sorting, and CSV export
+- 📈 **Activity tracking** - View status changes with interactive filters (status, person, date)
 - 📎 **CSV upload for bulk operations** - Upload CSV files to create issues in bulk
 - ✏️ Create and update issues with confirmation workflow
-- 📈 Track status changes and activity over time
 - 🎨 Multiple themes with visual effects
-- ⚡ Streaming responses with reasoning display
+- ⚡ Streaming responses with reasoning display and token usage
 - 🔄 Smart context management with cached data analysis for follow-ups
 - 🔐 Simple authentication with environment-based credentials
 - 🤖 **Agentic RAG** - AI dynamically retrieves context via tools
 - 🔍 **AI Auditor System** - Specialized auditors verify AI responses for accuracy
+- 🔁 **Retry responses** - Regenerate AI response with fresh data if it hallucinates
 
 ## Tech Stack
 
@@ -140,14 +141,21 @@ The app includes a "mixture of experts" auditing system that verifies AI respons
 
 | Auditor | Purpose | Checks |
 | ------- | ------- | ------ |
-| **Filter Auditor** | Validates applied filters match the question | Sprint selection, assignee filters, status filters |
+| **Filter Auditor** | Validates applied filters match the question | Sprint selection, assignee filters, status filters, date ranges |
 | **Facts Auditor** | Verifies numerical accuracy | Totals, per-person breakdowns, issue validity |
+| **Mutation Auditor** | Pre-confirms write operations | Issue count, field values, content matching user intent |
 
 ### How It Works
 
+**For read operations:**
 1. **Filter Auditor** runs first - if wrong filters were applied, the data is wrong
 2. **Facts Auditor** runs second - verifies numbers in the AI response against actual data
 3. Fail-fast logic: if filters are wrong, skip facts check (data is already invalid)
+
+**For write operations:**
+1. **Mutation Auditor** runs before user confirmation
+2. Validates that proposed tool arguments match user's request
+3. Understands tool defaults (e.g., `issue_type=Story`, `status=To Do` are normal if omitted)
 
 ### Status Normalization
 
@@ -184,6 +192,37 @@ When the AI returns issue data, it's displayed in interactive tables with:
 - **📱 Responsive**: Controls collapse on mobile
 
 For sprint comparisons, issues are displayed in side-by-side columns with synchronized controls.
+
+## Activity Cards
+
+When tracking status changes (via `get_activity`), results are displayed with:
+
+- **🔍 Search**: Filter by issue key
+- **🏷️ Filters**: Multi-select for "To Status", "Changed By", and "Date"
+- **📥 CSV Export**: Download activity log
+- **📅 Date Awareness**: AI knows the current date and timezone for accurate queries
+- **⚠️ 7-day limit**: Activity requests over 7 days return an error to prevent token overuse
+
+## Chat Features
+
+### Token Usage Display
+
+At the end of each AI response, the reasoning panel shows token usage:
+- Input tokens + Output tokens (total)
+- Warning indicator if total exceeds 25,000 tokens
+
+### Retry Button
+
+Each assistant message has a **↻ retry** button that:
+- Clears cached data to force fresh API calls
+- Regenerates the response with the same conversation context
+- Useful when the AI hallucinates or gives incorrect answers
+
+### Context Management
+
+- Message history is compressed after 6 messages to save tokens
+- Older messages are summarized while preserving key data (sprint IDs, assignees, counts)
+- Dynamic tool loading: only detailed tool prompts are loaded when needed
 
 ## Available Scripts
 
@@ -229,8 +268,10 @@ jira-pm-agent/
 │   ├── components/           # React components
 │   │   ├── chat/             # Chat UI components
 │   │   │   ├── IssueListCard/    # Interactive issue table
+│   │   │   ├── ActivityCard/     # Activity log with filters
 │   │   │   ├── SprintComparisonCard/ # Multi-sprint comparison
 │   │   │   ├── CSVUpload/        # CSV upload with validation
+│   │   │   ├── MultiSelectDropdown/  # Reusable filter dropdown
 │   │   │   └── ...
 │   │   └── themes/           # Theme visual effects
 │   ├── login/                # Login page
@@ -240,7 +281,11 @@ jira-pm-agent/
 ├── contexts/
 │   └── CSVContext.tsx        # CSV state management (client-side)
 ├── hooks/
-│   └── useChat.ts            # Chat state management
+│   └── useChat/              # Chat state management
+│       ├── useChat.ts        # Main hook
+│       ├── eventHandlers.ts  # SSE event processing
+│       ├── sessionManager.ts # Session persistence
+│       └── types.ts          # Hook types
 ├── lib/
 │   ├── constants/            # App constants
 │   ├── ollama.ts             # Ollama API client
@@ -248,15 +293,26 @@ jira-pm-agent/
 │   │   ├── index.ts          # Auditor orchestration
 │   │   ├── filterAuditor.ts  # Validates applied filters
 │   │   ├── factsAuditor.ts   # Verifies numbers and facts
+│   │   ├── mutationAuditor.ts # Pre-confirms write operations
 │   │   ├── utils.ts          # Shared utilities
 │   │   └── types.ts          # Auditor types
+│   ├── utils/
+│   │   └── dates.ts          # Date parsing/formatting utilities
 │   └── jira/                 # Jira integration
 │       ├── index.ts          # Main exports
-│       ├── client.ts         # Jira API client
+│       ├── client/           # Jira API client (modular)
+│       │   ├── index.ts      # Client factory
+│       │   ├── types.ts      # Client types
+│       │   ├── fetch.ts      # HTTP utilities
+│       │   ├── sprints.ts    # Sprint operations
+│       │   ├── issues.ts     # Issue CRUD
+│       │   ├── metadata.ts   # Statuses, priorities
+│       │   ├── transitions.ts # Issue transitions
+│       │   └── users.ts      # User management
 │       ├── cache.ts          # Sprint/status/team caching
 │       ├── config.ts         # Project configuration
-│       ├── tools.ts          # Tool definitions for AI
-│       ├── prompts.ts        # Minimal AI system prompt
+│       ├── tools.ts          # Tool definitions (light + full)
+│       ├── prompts.ts        # Conditional AI system prompt
 │       ├── types.ts          # Jira-specific types
 │       ├── executor/         # Tool execution
 │       │   ├── executor.ts   # Main dispatcher

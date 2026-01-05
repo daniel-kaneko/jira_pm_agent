@@ -113,7 +113,9 @@ export function buildActivityFactsSheet(
 
   const changeDetails = changes
     .slice(0, 30)
-    .map((c) => `${c.issue_key}: ${c.field} "${c.from || "—"}" → "${c.to || "—"}"`)
+    .map(
+      (c) => `${c.issue_key}: ${c.field} "${c.from || "—"}" → "${c.to || "—"}"`
+    )
     .join("\n");
 
   const periodStr = period ? `Period: ${period.since} to ${period.until}` : "";
@@ -121,6 +123,7 @@ export function buildActivityFactsSheet(
   return `ACTIVITY SUMMARY:
 ${periodStr}
 Total: ${totalChanges} changes across ${issueKeys.size} issues
+(Note: One issue can have multiple status changes, so changes > issues is normal)
 
 STATUS TRANSITIONS:
 ${statusLines || "No status changes"}
@@ -129,8 +132,5 @@ BY PERSON:
 ${personLines}
 
 AFFECTED ISSUES:
-${[...issueKeys].join(", ")}
-
-CHANGE DETAILS (first 30):
-${changeDetails}`;
+${[...issueKeys].join(", ")}`;
 }

@@ -1,6 +1,7 @@
 import { ollamaRequest } from "../ollama";
 import { AuditorResult, FilterAuditorInput } from "./types";
 import { AppliedFilters } from "../types/api";
+import { getLocalToday } from "../utils/dates";
 
 const TOOL_SPECS: Record<string, string> = {
   get_sprint_issues: `get_sprint_issues(sprint_ids: number[], assignees?: string[], status_filters?: string[])
@@ -74,9 +75,8 @@ export async function filterAuditor(
     sprintName,
     assigneeMap,
   });
-  const today = new Date().toISOString().split("T")[0];
 
-  const prompt = `Today: ${today}
+  const prompt = `Today: ${getLocalToday()}
 
 Tool: ${toolUsed}
 ${toolSpec}
@@ -90,7 +90,7 @@ Can this answer the question? YES or NO: [why]`;
     const response = await ollamaRequest("/api/generate", {
       prompt,
       stream: false,
-      options: { num_predict: 60, temperature: 0 },
+      options: { temperature: 0 },
     });
 
     if (!response.ok) {

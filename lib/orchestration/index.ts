@@ -27,6 +27,7 @@ import {
   compressMessages,
 } from "./context";
 import { summarizeToolResult } from "./summarize";
+import { getLocalToday, getLocalTimezone } from "../utils/dates";
 
 /** Token usage warning threshold (80% of 32k context) */
 const TOKEN_WARNING_THRESHOLD = 25000;
@@ -110,8 +111,7 @@ export async function* orchestrate(
     useAuditor,
   } = params;
 
-  const currentDate = new Date().toISOString().split("T")[0];
-  const systemPrompt = generateSystemPrompt(currentDate);
+  const systemPrompt = generateSystemPrompt(getLocalToday(), getLocalTimezone());
 
   const currentMessage = conversationHistory[conversationHistory.length - 1];
   const previousHistory = conversationHistory.slice(0, -1);
@@ -451,7 +451,7 @@ export async function* orchestrate(
         tool_calls: assistantMessage.tool_calls,
       });
 
-      const condensedResult = condenseForAI(toolName, toolResult, toolArgs);
+      const condensedResult = await condenseForAI(toolName, toolResult, toolArgs);
       messages.push({
         role: "tool",
         tool_call_id: toolCall.id,

@@ -1,9 +1,11 @@
 /**
  * Generate a minimal system prompt - let tools be self-documenting
  * @param currentDate - ISO date string (YYYY-MM-DD) for relative date calculations
+ * @param timezone - IANA timezone string (e.g., "America/Sao_Paulo")
  */
-export function generateSystemPrompt(currentDate?: string): string {
-  const datePrefix = currentDate ? `Today is ${currentDate}. ` : "";
+export function generateSystemPrompt(currentDate?: string, timezone?: string): string {
+  const tzInfo = timezone ? ` (${timezone})` : "";
+  const datePrefix = currentDate ? `Today is ${currentDate}${tzInfo}. ` : "";
   return `${datePrefix}You are a Jira PM assistant. Always respond in English.
 
 JIRA BASICS:

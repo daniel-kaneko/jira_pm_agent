@@ -3,6 +3,12 @@
 import { useMemo, useState } from "react";
 import { PREVIEW_COUNT } from "@/lib/constants";
 import { rowsToCsv, downloadCsv } from "@/lib/utils";
+import {
+  formatLocalDate,
+  formatPeriod,
+  getLocalDateKey,
+  compareDatesDesc,
+} from "@/lib/utils/dates";
 import { MultiSelectDropdown } from "../MultiSelectDropdown";
 
 export interface ActivityChange {
@@ -71,9 +77,10 @@ function groupByIssue(changes: ActivityChange[]): GroupedActivity[] {
 }
 
 /**
- * Format date string for display.
+ * Format datetime string for display (with time).
+ * This receives full datetime, so timezone is handled correctly.
  */
-function formatDate(dateStr: string): string {
+function formatDateTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString("en-US", {
     month: "short",
@@ -81,17 +88,6 @@ function formatDate(dateStr: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-/**
- * Format period for display.
- */
-function formatPeriod(since: string, until: string): string {
-  const sinceDate = new Date(since);
-  const untilDate = new Date(until);
-  const format = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `${format(sinceDate)} → ${format(untilDate)}`;
 }
 
 /**
@@ -130,6 +126,7 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
   const [search, setSearch] = useState("");
   const [toStatusFilter, setToStatusFilter] = useState<string[]>([]);
   const [changedByFilter, setChangedByFilter] = useState<string[]>([]);
+  const [dateFilter, setDateFilter] = useState<string[]>([]);
 
   const uniqueToStatuses = useMemo(
     () =>
@@ -147,6 +144,16 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
     () => [...new Set(data.changes.map((c) => c.changed_by))].sort(),
     [data.changes]
   );
+
+  const uniqueDates = useMemo(() => {
+    const dateKeys = [...new Set(data.changes.map((c) => getLocalDateKey(c.changed_at)))];
+    return dateKeys
+      .sort(compareDatesDesc)
+      .map((key) => ({
+        key,
+        label: formatLocalDate(key),
+      }));
+  }, [data.changes]);
 
   const filteredChanges = useMemo(() => {
     let result = [...data.changes];
@@ -176,8 +183,14 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
       );
     }
 
+    if (dateFilter.length > 0) {
+      result = result.filter((change) =>
+        dateFilter.includes(getLocalDateKey(change.changed_at))
+      );
+    }
+
     return result;
-  }, [data.changes, search, toStatusFilter, changedByFilter]);
+  }, [data.changes, search, toStatusFilter, changedByFilter, dateFilter]);
 
   const grouped = useMemo(
     () => groupByIssue(filteredChanges),
@@ -189,7 +202,7 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
     : grouped.slice(0, PREVIEW_COUNT);
   const hasMore = grouped.length > PREVIEW_COUNT;
   const isFiltered =
-    search || toStatusFilter.length > 0 || changedByFilter.length > 0;
+    search || toStatusFilter.length > 0 || changedByFilter.length > 0 || dateFilter.length > 0;
 
   const toggleExpand = (key: string) => {
     setExpanded((prev) => {
@@ -279,7 +292,16 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <MultiSelectDropdown
+              label="Date"
+              options={uniqueDates.map((d) => d.key)}
+              selected={dateFilter}
+              onChange={setDateFilter}
+              formatOption={(key) =>
+                uniqueDates.find((d) => d.key === key)?.label || key
+              }
+            />
             <MultiSelectDropdown
               label="To Status"
               options={uniqueToStatuses}
@@ -298,6 +320,7 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
                   setSearch("");
                   setToStatusFilter([]);
                   setChangedByFilter([]);
+                  setDateFilter([]);
                 }}
                 className="px-2 py-1 text-[var(--red)] hover:bg-[var(--bg-highlight)] rounded transition-colors"
               >
@@ -379,7 +402,7 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
                               className="text-xs border-l-2 border-[var(--fg-muted)]/30 pl-2"
                             >
                               <div className="flex items-center gap-2 text-[var(--fg-muted)]">
-                                <span>{formatDate(change.changed_at)}</span>
+                                <span>{formatDateTime(change.changed_at)}</span>
                                 <span>by {change.changed_by}</span>
                               </div>
                               <div className="text-[var(--fg)]">

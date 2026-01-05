@@ -48,7 +48,7 @@ export function MultiSelectDropdown({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="px-2 py-1 text-xs bg-[var(--bg-highlight)] border border-[var(--bg-highlight)] rounded text-[var(--fg)] hover:border-[var(--fg-muted)] transition-colors flex items-center gap-1 min-w-[100px]"
+        className="px-2 py-1 text-xs bg-[var(--bg-highlight)] border border-[var(--bg-highlight)] rounded text-[var(--fg)] hover:border-[var(--fg-muted)] transition-colors flex items-center justify-between gap-1 min-w-[100px]"
       >
         <span className="truncate">
           {selected.length === 0 ? label : `${selected.length} selected`}
@@ -89,4 +89,3 @@ export function MultiSelectDropdown({
     </div>
   );
 }
-

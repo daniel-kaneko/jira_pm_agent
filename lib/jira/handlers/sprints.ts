@@ -89,6 +89,15 @@ export async function handleGetActivity(
   const sinceDate = parseSinceDate(since);
   const untilDate = new Date();
 
+  const daysDiff = Math.ceil(
+    (untilDate.getTime() - sinceDate.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  if (daysDiff > 7) {
+    throw new Error(
+      `Activity requests are limited to 7 days maximum (you requested ${daysDiff} days). Please narrow your date range.`
+    );
+  }
+
   const [cachedTeam, issuesWithChangelogs] = await Promise.all([
     getCachedTeamMembers(config.id),
     client.getSprintChangelogs(sprint_ids, sinceDate),

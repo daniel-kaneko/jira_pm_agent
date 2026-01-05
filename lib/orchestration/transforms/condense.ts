@@ -9,138 +9,48 @@ import type {
   GetActivityResult,
 } from "../types";
 import { TOOL_NAMES } from "../../constants";
+import { ollamaRequest } from "../../ollama";
 
 /**
- * Extract common topics/themes from issue summaries using n-gram analysis.
+ * Extract common topics/themes from issue summaries using LLM analysis.
  * @param summaries - Array of issue summary strings.
- * @returns Array of phrase-count pairs, sorted by frequency.
+ * @returns Array of topic strings identified by the LLM.
  */
-export function extractTopics(
-  summaries: string[]
-): Array<{ phrase: string; count: number }> {
-  const stopWords = new Set([
-    "the",
-    "a",
-    "an",
-    "and",
-    "or",
-    "but",
-    "in",
-    "on",
-    "at",
-    "to",
-    "for",
-    "of",
-    "with",
-    "by",
-    "from",
-    "as",
-    "is",
-    "was",
-    "are",
-    "were",
-    "been",
-    "be",
-    "have",
-    "has",
-    "had",
-    "do",
-    "does",
-    "did",
-    "will",
-    "would",
-    "could",
-    "should",
-    "may",
-    "might",
-    "must",
-    "shall",
-    "can",
-    "need",
-    "this",
-    "that",
-    "these",
-    "those",
-    "i",
-    "you",
-    "he",
-    "she",
-    "it",
-    "we",
-    "they",
-    "what",
-    "which",
-    "who",
-    "whom",
-    "where",
-    "when",
-    "why",
-    "how",
-    "all",
-    "each",
-    "every",
-    "both",
-    "few",
-    "more",
-    "most",
-    "other",
-    "some",
-    "such",
-    "no",
-    "nor",
-    "not",
-    "only",
-    "own",
-    "same",
-    "so",
-    "than",
-    "too",
-    "very",
-    "just",
-    "also",
-    "now",
-    "new",
-    "first",
-    "last",
-    "get",
-    "set",
-    "add",
-    "update",
-    "fix",
-    "create",
-    "delete",
-    "remove",
-    "dev",
-    "spike",
-  ]);
+export async function extractTopics(summaries: string[]): Promise<string[]> {
+  if (summaries.length === 0) return [];
 
-  const phraseCounts = new Map<string, number>();
+  const sample = summaries.slice(0, 30).join("\n- ");
 
-  for (const summary of summaries) {
-    const cleaned = summary
-      .replace(/[\[\](){}]/g, " ")
-      .replace(/[^a-zA-Z0-9\s-]/g, "")
-      .toLowerCase();
+  const prompt = `Analyze these Jira issue titles and extract 3-6 main themes/categories.
+Focus on: feature areas, components, bug types, or work categories.
+Keep tags like [B2B], [PDP], [Cart] if they appear often.
 
-    const words = cleaned.split(/\s+/).filter((w) => w.length > 2);
+ISSUES:
+- ${sample}
 
-    for (let i = 0; i < words.length - 1; i++) {
-      if (stopWords.has(words[i]) || stopWords.has(words[i + 1])) continue;
-      const bigram = `${words[i]} ${words[i + 1]}`;
-      phraseCounts.set(bigram, (phraseCounts.get(bigram) || 0) + 1);
-    }
+Reply with ONLY a comma-separated list of themes, nothing else.
+Example: B2B Cart, PDP bugs, Login/Auth, Data Layer`;
 
-    for (let i = 0; i < words.length - 2; i++) {
-      if (stopWords.has(words[i]) || stopWords.has(words[i + 2])) continue;
-      const trigram = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
-      phraseCounts.set(trigram, (phraseCounts.get(trigram) || 0) + 1);
-    }
+  try {
+    const response = await ollamaRequest("/api/generate", {
+      prompt,
+      stream: false,
+      options: { num_predict: 80, temperature: 0.1 },
+    });
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const answer = (data.response || "").trim();
+
+    return answer
+      .split(",")
+      .map((t: string) => t.trim())
+      .filter((t: string) => t.length > 0);
+  } catch (error) {
+    console.error("[extractTopics] LLM error:", error);
+    return [];
   }
-
-  return [...phraseCounts.entries()]
-    .filter(([, count]) => count >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .map(([phrase, count]) => ({ phrase, count }));
 }
 
 /**
@@ -188,10 +98,10 @@ function condenseAnalyzeCachedData(result: AnalyzeCachedDataResult): string {
 /**
  * Condense get_sprint_issues result for AI consumption.
  */
-function condenseSprintIssues(
+async function condenseSprintIssues(
   result: SprintIssuesResult,
   toolArgs: Record<string, unknown>
-): string {
+): Promise<string> {
   const sprintEntries = Object.entries(result.sprints);
   const includeBreakdown = toolArgs.include_breakdown === true;
 
@@ -246,12 +156,9 @@ function condenseSprintIssues(
   }
 
   const allIssues = sprintEntries.flatMap(([, s]) => s.issues);
-  const topics = extractTopics(allIssues.map((i) => i.summary));
+  const topics = await extractTopics(allIssues.map((i) => i.summary));
   if (topics.length > 0) {
-    output += `\nTOP TOPICS (by frequency):\n`;
-    for (const topic of topics.slice(0, 8)) {
-      output += `- "${topic.phrase}" (${topic.count} issues)\n`;
-    }
+    output += `\nMAIN THEMES: ${topics.join(", ")}\n`;
   }
 
   const statusCounts = new Map<string, number>();
@@ -278,11 +185,11 @@ function condenseSprintIssues(
  * @param toolArgs - Arguments passed to the tool.
  * @returns Condensed result suitable for AI context.
  */
-export function condenseForAI(
+export async function condenseForAI(
   toolName: string,
   result: unknown,
   toolArgs: Record<string, unknown> = {}
-): unknown {
+): Promise<unknown> {
   if (toolName === TOOL_NAMES.PREPARE_ISSUES) {
     return condensePrepareIssues(result as PrepareIssuesResult);
   }
@@ -292,7 +199,7 @@ export function condenseForAI(
   }
 
   if (toolName === TOOL_NAMES.GET_SPRINT_ISSUES) {
-    return condenseSprintIssues(result as SprintIssuesResult, toolArgs);
+    return await condenseSprintIssues(result as SprintIssuesResult, toolArgs);
   }
 
   if (toolName === TOOL_NAMES.GET_ACTIVITY) {

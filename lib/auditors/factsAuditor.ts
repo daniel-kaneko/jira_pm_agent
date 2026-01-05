@@ -35,7 +35,7 @@ Answer ONLY on this format: "YES or NO: [brief reason if NO]"`;
     const response = await ollamaRequest("/api/generate", {
       prompt,
       stream: false,
-      options: { num_predict: 60, temperature: 0 },
+      options: { temperature: 0 },
     });
 
     if (!response.ok) {

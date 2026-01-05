@@ -80,19 +80,25 @@ export function validateSprintIds(
 /**
  * Normalize a value to an array.
  */
-export function normalizeToArray<T>(value: T | T[] | undefined): T[] | undefined {
+export function normalizeToArray<T>(
+  value: T | T[] | undefined
+): T[] | undefined {
   if (value === undefined || value === null) return undefined;
   return Array.isArray(value) ? value : [value];
 }
 
 /**
- * Parse an ISO date string into a Date.
+ * Parse a date string into a Date.
+ * Handles YYYY-MM-DD as local midnight to avoid timezone issues.
  */
 export function parseSinceDate(since: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(since)) {
+    const [year, month, day] = since.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
   const parsed = new Date(since);
   if (isNaN(parsed.getTime())) {
     throw new Error(`Invalid date format: "${since}". Use YYYY-MM-DD.`);
   }
   return parsed;
 }
-

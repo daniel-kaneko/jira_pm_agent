@@ -508,6 +508,7 @@ export async function* orchestrate(
           toolUsed: "get_activity",
           appliedFilters: {
             since: data.period.since,
+            until: data.period.until,
             toStatus: data.filters_applied.to_status ?? undefined,
             assignees: data.filters_applied.assignees ?? undefined,
           },

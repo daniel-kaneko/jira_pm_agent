@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
-import { getVMStatus, isVMConfigured } from "@/lib/azure/vm";
+import { getVMStatus } from "@/lib/azure/vm";
 
 export async function GET(): Promise<Response> {
-  if (!isVMConfigured()) {
-    return NextResponse.json({
-      configured: false,
-      powerState: "unknown",
-      ollamaReady: false,
-    });
-  }
-
   try {
     const status = await getVMStatus();
     return NextResponse.json(status);
@@ -17,7 +9,7 @@ export async function GET(): Promise<Response> {
     console.error("[VM Status] Error:", error);
     return NextResponse.json(
       {
-        configured: true,
+        configured: false,
         powerState: "unknown",
         ollamaReady: false,
         error: error instanceof Error ? error.message : "Unknown error",

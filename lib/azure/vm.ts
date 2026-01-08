@@ -4,9 +4,16 @@ import { ComputeManagementClient } from "@azure/arm-compute";
 const AZURE_SUBSCRIPTION_ID = process.env.AZURE_SUBSCRIPTION_ID || "";
 const AZURE_RESOURCE_GROUP = process.env.AZURE_RESOURCE_GROUP || "";
 const AZURE_VM_NAME = process.env.AZURE_VM_NAME || "";
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "";
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 const OLLAMA_AUTH_USER = process.env.OLLAMA_AUTH_USER;
 const OLLAMA_AUTH_PASS = process.env.OLLAMA_AUTH_PASS;
+
+/**
+ * Check if running in local mode (localhost Ollama without Azure VM).
+ */
+function isLocalMode(): boolean {
+  return OLLAMA_BASE_URL.includes("localhost") && !isVMConfigured();
+}
 
 export type VMPowerState = "running" | "deallocated" | "starting" | "stopping" | "unknown";
 
@@ -97,8 +104,20 @@ export async function checkOllamaHealth(timeoutMs = 5000): Promise<boolean> {
 
 /**
  * Get full VM status including Ollama health.
+ * In local mode (localhost without Azure VM), just check Ollama health.
  */
 export async function getVMStatus(): Promise<VMStatus> {
+  // Local mode: no VM, just check if Ollama is running
+  if (isLocalMode()) {
+    const ollamaReady = await checkOllamaHealth();
+    return {
+      configured: true,
+      powerState: ollamaReady ? "running" : "deallocated",
+      ollamaReady,
+    };
+  }
+
+  // Azure VM mode
   if (!isVMConfigured()) {
     return { configured: false, powerState: "unknown", ollamaReady: false };
   }

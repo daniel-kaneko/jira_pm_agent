@@ -7,9 +7,9 @@ const TOOL_SPECS: Record<string, string> = {
   get_sprint_issues: `get_sprint_issues(sprint_ids: number[], assignees?: string[], status_filters?: string[])
 → Returns: { issues: Issue[], total_issues: number, total_story_points: number, sprints: { [name]: count } }
 → Defaults: No assignees = ALL, No status_filters = ALL`,
-  get_activity: `get_activity(since: string, assignees?: string[], to_status?: string)
+  get_activity: `get_activity(since: string, until?: string, assignees?: string[], to_status?: string)
 → Returns: { changes: StatusChange[], total_changes: number, period: { since, until } }
-→ Defaults: No assignees = ALL, No to_status = ALL status changes`,
+→ Defaults: No until = today, No assignees = ALL, No to_status = ALL status changes`,
 };
 
 function buildFilterLines(
@@ -48,6 +48,11 @@ function buildFilterLines(
   if (tool === "get_activity") {
     if (filters.since) {
       lines.push(`since: ${filters.since}`);
+    }
+    if (filters.until) {
+      lines.push(`until: ${filters.until}`);
+    } else {
+      lines.push(`until: today (${getLocalToday()})`);
     }
     if (filters.toStatus) {
       lines.push(`to_status: ${filters.toStatus}`);

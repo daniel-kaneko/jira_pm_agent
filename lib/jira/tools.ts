@@ -81,12 +81,16 @@ export const lightTools: ToolDefinition[] = [
     type: "function",
     function: {
       name: TOOL_NAMES.GET_ACTIVITY,
-      description: "Get status changes since a date.",
+      description: "Get status changes in a date range.",
       parameters: {
         type: "object",
         properties: {
           sprint_ids: { type: "array", description: "sprint IDs" },
-          since: { type: "string", description: "YYYY-MM-DD" },
+          since: { type: "string", description: "start date YYYY-MM-DD" },
+          until: {
+            type: "string",
+            description: "end date YYYY-MM-DD (defaults to today)",
+          },
           to_status: { type: "string", description: "filter to status" },
         },
         required: ["since"],
@@ -340,10 +344,11 @@ Returns: { key, summary, description, status, assignee, comments: [...] }`,
     type: "function",
     function: {
       name: TOOL_NAMES.GET_ACTIVITY,
-      description: `Get status changes for issues in a sprint since a date.
+      description: `Get status changes for issues in a sprint within a date range (max 7 days).
 
 Examples:
-- get_activity(since: "2025-12-31") - changes today in active sprint
+- get_activity(since: "2025-12-31") - changes from Dec 31 to today
+- get_activity(since: "2025-12-25", until: "2025-12-31") - changes Dec 25-31
 - get_activity(sprint_ids: [3625], since: "2025-12-23") - changes since Dec 23
 - get_activity(since: "2025-12-01", to_status: "Concluído") - what moved to Done
 - get_activity(since: "2025-12-20", assignees: ["John Doe"]) - John's changes
@@ -363,6 +368,11 @@ Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, c
             type: "string",
             description:
               "Start date in ISO format: 'YYYY-MM-DD' (e.g. '2024-12-23')",
+          },
+          until: {
+            type: "string",
+            description:
+              "End date in ISO format: 'YYYY-MM-DD' (defaults to today if not provided)",
           },
           to_status: {
             type: "string",

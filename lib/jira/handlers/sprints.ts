@@ -65,6 +65,7 @@ export async function handleGetActivity(
 ): Promise<GetActivityResult> {
   let sprint_ids = args.sprint_ids as number[] | undefined;
   const since = args.since as string | undefined;
+  const until = args.until as string | undefined;
   const to_status = args.to_status as string | undefined;
   const assignees = args.assignees as string[] | undefined;
 
@@ -87,7 +88,7 @@ export async function handleGetActivity(
   }
 
   const sinceDate = parseSinceDate(since);
-  const untilDate = new Date();
+  const untilDate = until ? parseSinceDate(until) : new Date();
 
   const daysDiff = Math.ceil(
     (untilDate.getTime() - sinceDate.getTime()) / (1000 * 60 * 60 * 24)

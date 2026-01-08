@@ -102,6 +102,7 @@ export interface AppliedFilters {
   sprintIds?: number[];
   statusFilters?: string[];
   since?: string;
+  until?: string;
   toStatus?: string;
 }
 

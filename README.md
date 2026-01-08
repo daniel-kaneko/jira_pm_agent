@@ -65,7 +65,7 @@ AUTH_PASSWORD=your-password
 
 # Ollama Configuration
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_MODEL=qwen3:14b
 
 # Optional: Basic auth for remote Ollama
 # OLLAMA_AUTH_USER=ollama
@@ -139,20 +139,22 @@ When the AI fetches issues (via `get_sprint_issues`), they're cached client-side
 
 The app includes a "mixture of experts" auditing system that verifies AI responses for accuracy:
 
-| Auditor | Purpose | Checks |
-| ------- | ------- | ------ |
-| **Filter Auditor** | Validates applied filters match the question | Sprint selection, assignee filters, status filters, date ranges |
-| **Facts Auditor** | Verifies numerical accuracy | Totals, per-person breakdowns, issue validity |
-| **Mutation Auditor** | Pre-confirms write operations | Issue count, field values, content matching user intent |
+| Auditor              | Purpose                                      | Checks                                                          |
+| -------------------- | -------------------------------------------- | --------------------------------------------------------------- |
+| **Filter Auditor**   | Validates applied filters match the question | Sprint selection, assignee filters, status filters, date ranges |
+| **Facts Auditor**    | Verifies numerical accuracy                  | Totals, per-person breakdowns, issue validity                   |
+| **Mutation Auditor** | Pre-confirms write operations                | Issue count, field values, content matching user intent         |
 
 ### How It Works
 
 **For read operations:**
+
 1. **Filter Auditor** runs first - if wrong filters were applied, the data is wrong
 2. **Facts Auditor** runs second - verifies numbers in the AI response against actual data
 3. Fail-fast logic: if filters are wrong, skip facts check (data is already invalid)
 
 **For write operations:**
+
 1. **Mutation Auditor** runs before user confirmation
 2. Validates that proposed tool arguments match user's request
 3. Understands tool defaults (e.g., `issue_type=Story`, `status=To Do` are normal if omitted)
@@ -161,11 +163,11 @@ The app includes a "mixture of experts" auditing system that verifies AI respons
 
 The system normalizes status names across languages:
 
-| Input | Matches |
-| ----- | ------- |
-| `done`, `completed`, `concluído` | Any "done" status |
-| `in progress`, `em progresso` | Any "in progress" status |
-| `todo`, `backlog`, `ready` | Any "to do" status |
+| Input                            | Matches                  |
+| -------------------------------- | ------------------------ |
+| `done`, `completed`, `concluído` | Any "done" status        |
+| `in progress`, `em progresso`    | Any "in progress" status |
+| `todo`, `backlog`, `ready`       | Any "to do" status       |
 
 Toggle the auditor on/off via the checkbox in the theme selector.
 
@@ -208,12 +210,14 @@ When tracking status changes (via `get_activity`), results are displayed with:
 ### Token Usage Display
 
 At the end of each AI response, the reasoning panel shows token usage:
+
 - Input tokens + Output tokens (total)
 - Warning indicator if total exceeds 25,000 tokens
 
 ### Retry Button
 
 Each assistant message has a **↻ retry** button that:
+
 - Clears cached data to force fresh API calls
 - Regenerates the response with the same conversation context
 - Useful when the AI hallucinates or gives incorrect answers
@@ -380,7 +384,7 @@ vercel
 | `AUTH_USERNAME`      | Login username                                         |
 | `AUTH_PASSWORD_HASH` | Bcrypt hash of password                                |
 | `OLLAMA_BASE_URL`    | `https://ollama.your-domain.com`                       |
-| `OLLAMA_MODEL`       | `qwen2.5:7b` (or other model)                          |
+| `OLLAMA_MODEL`       | `qwen3:14b` (or other model)                           |
 | `OLLAMA_AUTH_USER`   | Basic auth username (if needed)                        |
 | `OLLAMA_AUTH_PASS`   | Basic auth password (if needed)                        |
 

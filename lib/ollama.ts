@@ -3,7 +3,7 @@ import type { ChatMessage, OllamaResponse, ToolCall } from "./types";
 import { isVMConfigured, wakeVMAndWaitForOllama } from "./azure/vm";
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:7b";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen3:14b";
 const OLLAMA_AUTH_USER = process.env.OLLAMA_AUTH_USER;
 const OLLAMA_AUTH_PASS = process.env.OLLAMA_AUTH_PASS;
 

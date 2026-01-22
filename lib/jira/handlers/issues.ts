@@ -25,10 +25,53 @@ import type {
   JiraProjectConfig,
   ToolResultMap,
   JiraSprintIssues,
+  JiraSprint,
   IssueToCreate,
   IssueToUpdate,
   BulkOperationResult,
 } from "../types";
+
+/**
+ * Resolves a sprint number (e.g., 28) to its actual Jira sprint ID (e.g., 9888).
+ * If the sprint_id is already a valid ID (>= 1000), returns it unchanged.
+ * @param sprintId - The sprint_id from user input (could be number like 28 or actual ID like 9888)
+ * @param allSprints - List of all sprints from the board
+ * @returns The actual Jira sprint ID
+ * @throws Error if sprint number cannot be resolved
+ */
+function resolveSprintId(
+  sprintId: number,
+  allSprints: JiraSprint[]
+): number {
+  // If it's already a proper ID (>= 1000), use as-is
+  if (sprintId >= 1000) {
+    return sprintId;
+  }
+
+  // It looks like a sprint NUMBER (e.g., 28), resolve it
+  const sprintNumber = sprintId;
+  const matched = allSprints.find((s) => {
+    const nameLower = s.name.toLowerCase();
+    // Match "Sprint 28", "ODP Sprint 28", etc.
+    return (
+      nameLower.includes(`sprint ${sprintNumber}`) ||
+      nameLower.endsWith(` ${sprintNumber}`) ||
+      s.name.match(new RegExp(`\\b${sprintNumber}\\b`))
+    );
+  });
+
+  if (!matched) {
+    const availableSprints = allSprints
+      .slice(0, 10)
+      .map((s) => `${s.name} (ID: ${s.id})`)
+      .join(", ");
+    throw new Error(
+      `Sprint "${sprintNumber}" not found. Available sprints: ${availableSprints}. Use list_sprints to find valid sprint IDs.`
+    );
+  }
+
+  return matched.id;
+}
 
 type GetSprintIssuesResult = ToolResultMap["get_sprint_issues"];
 type GetIssueResult = ToolResultMap["get_issue"];
@@ -222,11 +265,25 @@ export async function handleCreateIssues(
 
     if (result.status === "created" && result.key) {
       const issueKey = result.key;
-      const targetSprintId = originalIssue.sprint_id ?? activeSprintId;
+      let targetSprintId = originalIssue.sprint_id ?? activeSprintId;
+      
+      // Resolve sprint number to ID if needed
+      if (targetSprintId && originalIssue.sprint_id) {
+        try {
+          targetSprintId = resolveSprintId(originalIssue.sprint_id, allSprints);
+        } catch (resolveError) {
+          console.warn(
+            `[createIssues] Failed to resolve sprint for ${issueKey}:`,
+            resolveError instanceof Error ? resolveError.message : resolveError
+          );
+          targetSprintId = activeSprintId; // Fall back to active sprint
+        }
+      }
+      
       if (targetSprintId) {
         try {
           await withRetry(() =>
-            client.moveIssuesToSprint(targetSprintId, [issueKey])
+            client.moveIssuesToSprint(targetSprintId!, [issueKey])
           );
         } catch (sprintError) {
           console.warn(
@@ -286,9 +343,13 @@ export async function handleUpdateIssues(
 
   const client = createJiraClient(config);
 
-  const [storyPointsFieldId, cachedTeam] = await Promise.all([
+  // Check if any issues need sprint updates
+  const needsSprintLookup = issues.some((i) => i.sprint_id !== undefined);
+
+  const [storyPointsFieldId, cachedTeam, allSprints] = await Promise.all([
     getStoryPointsFieldId(config.id),
     getCachedTeamMembers(config.id),
+    needsSprintLookup ? getCachedSprints(config.id) : Promise.resolve([]),
   ]);
 
   const results: BulkOperationResult[] = [];
@@ -351,11 +412,16 @@ export async function handleUpdateIssues(
       }
 
       if (issue.sprint_id) {
-        const sprintId = issue.sprint_id;
+        const resolvedSprintId = resolveSprintId(issue.sprint_id, allSprints);
         await withRetry(() =>
-          client.moveIssuesToSprint(sprintId, [issue.issue_key])
+          client.moveIssuesToSprint(resolvedSprintId, [issue.issue_key])
         );
-        changes.push(`sprint → ${sprintId}`);
+        // Show both the user's input and the resolved ID for clarity
+        const sprintInfo = allSprints.find((s) => s.id === resolvedSprintId);
+        const sprintDisplay = sprintInfo
+          ? `${sprintInfo.name}`
+          : `Sprint ${resolvedSprintId}`;
+        changes.push(`sprint → ${sprintDisplay}`);
       }
 
       if (issue.status) {

@@ -107,7 +107,7 @@ export async function checkOllamaHealth(timeoutMs = 5000): Promise<boolean> {
  * In local mode (localhost without Azure VM), just check Ollama health.
  */
 export async function getVMStatus(): Promise<VMStatus> {
-  // Local mode: no VM, just check if Ollama is running
+    // Local mode: no VM, just check if Ollama is running
   if (isLocalMode()) {
     const ollamaReady = await checkOllamaHealth();
     return {
@@ -117,7 +117,6 @@ export async function getVMStatus(): Promise<VMStatus> {
     };
   }
 
-  // Azure VM mode
   if (!isVMConfigured()) {
     return { configured: false, powerState: "unknown", ollamaReady: false };
   }

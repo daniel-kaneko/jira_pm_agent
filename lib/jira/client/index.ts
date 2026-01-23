@@ -43,6 +43,9 @@ export function createJiraClient(config: JiraProjectConfig) {
     getSprintChangelogs: (sprintIds: number[], sinceDate: Date) =>
       sprints.getSprintChangelogs(ctx, sprintIds, sinceDate),
 
+    searchByJQL: (requestBody: Record<string, unknown>) =>
+      sprints.searchByJQL(ctx, requestBody),
+
     getIssue: (issueKey: string, storyPointsFieldId?: string | null) =>
       issues.getIssue(ctx, issueKey, storyPointsFieldId),
 

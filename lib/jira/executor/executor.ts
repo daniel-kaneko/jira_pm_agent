@@ -14,25 +14,31 @@ import {
   handleListSprints,
   handleGetActivity,
   handleGetContext,
+  handleListEpics,
   type ListSprintsResult,
   type GetActivityResult,
   type GetContextResult,
 } from "../handlers";
+import { handleGetEpicProgress } from "../handlers/epics";
 
 type GetSprintIssuesResult = ToolResultMap["get_sprint_issues"];
 type GetIssueResult = ToolResultMap["get_issue"];
 type CreateIssuesResult = ToolResultMap["create_issues"];
 type UpdateIssuesResult = ToolResultMap["update_issues"];
+type GetEpicProgressResult = ToolResultMap["get_epic_progress"];
+type ListEpicsResult = ToolResultMap["list_epics"];
 
 export async function executeJiraTool(
   toolCall: ToolCallInput,
   configId: string
 ): Promise<
   | ListSprintsResult
+  | ListEpicsResult
   | GetContextResult
   | GetSprintIssuesResult
   | GetIssueResult
   | GetActivityResult
+  | GetEpicProgressResult
   | CreateIssuesResult
   | UpdateIssuesResult
 > {
@@ -42,6 +48,9 @@ export async function executeJiraTool(
   switch (name as ToolName) {
     case "list_sprints":
       return handleListSprints(config, args);
+
+    case "list_epics":
+      return handleListEpics(config, args);
 
     case "get_context":
       return handleGetContext(config);
@@ -54,6 +63,9 @@ export async function executeJiraTool(
 
     case "get_activity":
       return handleGetActivity(config, args);
+
+    case "get_epic_progress":
+      return handleGetEpicProgress(config, args);
 
     case "create_issues":
       return handleCreateIssues(config, args);

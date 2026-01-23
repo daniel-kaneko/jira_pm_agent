@@ -18,3 +18,4 @@ export {
 
 export { handleGetContext, type GetContextResult } from "./context";
 
+export { handleGetEpicProgress, handleListEpics } from "./epics";

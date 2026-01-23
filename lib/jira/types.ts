@@ -297,14 +297,36 @@ export interface AnalyzeCachedDataArgs {
   };
 }
 
+export interface GetEpicProgressArgs {
+  epic_key: string;
+  include_subtasks?: boolean;
+}
+
+export interface ListEpicsArgs {
+  status?: string[];
+  limit?: number;
+}
+
+export interface EpicProgressIssue {
+  key: string;
+  key_link: string;
+  summary: string;
+  status: string;
+  assignee: string | null;
+  story_points: number | null;
+  issue_type: string;
+}
+
 export type ToolArgsMap = {
   list_sprints: ListSprintsArgs;
+  list_epics: ListEpicsArgs;
   get_context: GetContextArgs;
   query_csv: QueryCSVArgs;
   prepare_issues: PrepareIssuesArgs;
   get_sprint_issues: GetSprintIssuesArgs;
   get_issue: GetIssueArgs;
   get_activity: GetActivityArgs;
+  get_epic_progress: GetEpicProgressArgs;
   create_issues: CreateIssuesArgs;
   update_issues: UpdateIssuesArgs;
   analyze_cached_data: AnalyzeCachedDataArgs;
@@ -319,6 +341,16 @@ export type ToolResultMap = {
   list_sprints: {
     sprints: Array<{ id: number; name: string; state: string }>;
     hint: string;
+  };
+  list_epics: {
+    total_epics: number;
+    epics: Array<{
+      key: string;
+      key_link: string;
+      summary: string;
+      status: string;
+      assignee: string | null;
+    }>;
   };
   get_context: {
     team_members: string[];
@@ -369,6 +401,7 @@ export type ToolResultMap = {
           status: string;
           assignee: string | null;
           story_points: number | null;
+          issue_type: string;
         }>;
       }
     >;
@@ -408,5 +441,30 @@ export type ToolResultMap = {
     succeeded: number;
     failed: number;
     results: BulkOperationResult[];
+  };
+  get_epic_progress: {
+    epic: {
+      key: string;
+      key_link: string;
+      summary: string;
+      status: string;
+      assignee: string | null;
+    };
+    progress: {
+      total_issues: number;
+      completed_issues: number;
+      total_story_points: number;
+      completed_story_points: number;
+      percent_by_count: number;
+      percent_by_points: number;
+    };
+    breakdown_by_status: Record<
+      string,
+      {
+        count: number;
+        story_points: number;
+        issues: EpicProgressIssue[];
+      }
+    >;
   };
 };

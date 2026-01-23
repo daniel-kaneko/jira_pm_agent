@@ -24,6 +24,8 @@ export { IssueListCard } from "./IssueListCard";
 export type { IssueListData, IssueData } from "./IssueListCard";
 export { ActivityCard } from "./ActivityCard";
 export type { ActivityListData, ActivityChange } from "./ActivityCard";
+export { EpicProgressCard } from "./EpicProgressCard";
+export type { EpicProgressData } from "./EpicProgressCard";
 export { SprintComparisonCard } from "./SprintComparisonCard";
 export { MultiSelectDropdown } from "./MultiSelectDropdown";
 export type { MultiSelectDropdownProps } from "./MultiSelectDropdown";

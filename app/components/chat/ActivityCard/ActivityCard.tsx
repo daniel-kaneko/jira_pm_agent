@@ -220,7 +220,6 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
 
   return (
     <div className="border border-[var(--bg-highlight)] rounded-lg overflow-hidden">
-      {/* Header */}
       <div className="bg-[var(--bg-highlight)] px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -259,7 +258,6 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
         </div>
       </div>
 
-      {/* Controls */}
       {showControls && (
         <div className="px-4 py-3 bg-[var(--bg)] border-b border-[var(--bg-highlight)]">
           <div className="flex gap-2 mb-2">
@@ -331,7 +329,6 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
         </div>
       )}
 
-      {/* Activity list */}
       <div className="divide-y divide-[var(--bg-highlight)]">
         {displayedGroups.length === 0 ? (
           <div className="px-4 py-8 text-center text-[var(--fg-muted)]">
@@ -393,7 +390,6 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
                         )}
                       </div>
 
-                      {/* Expanded changes */}
                       {isGroupExpanded && (
                         <div className="mt-2 space-y-1.5">
                           {group.changes.map((change, idx) => (
@@ -431,7 +427,6 @@ export function ActivityCard({ data }: { data: ActivityListData }) {
         )}
       </div>
 
-      {/* Show more button */}
       {hasMore && (
         <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--bg-highlight)]">
           <button

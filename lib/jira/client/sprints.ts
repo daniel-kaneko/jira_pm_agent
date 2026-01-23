@@ -153,6 +153,23 @@ export async function moveIssuesToSprint(
 }
 
 /**
+ * Search issues by JQL query with pagination support.
+ */
+export async function searchByJQL(
+  ctx: ClientContext,
+  requestBody: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  return jiraFetch<Record<string, unknown>>(
+    `/rest/api/3/search/jql`,
+    ctx,
+    {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+    }
+  );
+}
+
+/**
  * Get changelog for issues in sprints since a date
  */
 export async function getSprintChangelogs(

@@ -20,6 +20,7 @@ export {
   isIssueData,
   isIssueListStructuredData,
   isActivityListStructuredData,
+  isEpicProgressStructuredData,
   isPendingAction,
   hasStructuredData,
   hasConfirmationRequired,
@@ -29,5 +30,6 @@ export {
 export type {
   IssueListStructuredData,
   ActivityListStructuredData,
+  EpicProgressStructuredData,
 } from "./guards";
 

@@ -25,6 +25,21 @@ export const lightTools: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: TOOL_NAMES.LIST_EPICS,
+      description: "List all epics in the project.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "array", description: "filter by status" },
+          limit: { type: "number", description: "max epics" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: TOOL_NAMES.GET_CONTEXT,
       description: "Get team members and statuses.",
       parameters: { type: "object", properties: {}, required: [] },
@@ -109,6 +124,20 @@ export const lightTools: ToolDefinition[] = [
           mapping: { type: "object", description: "column mappings" },
         },
         required: ["mapping"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.GET_EPIC_PROGRESS,
+      description: "Get progress/completion status of an epic.",
+      parameters: {
+        type: "object",
+        properties: {
+          epic_key: { type: "string", description: "Epic key e.g. PROJ-123" },
+        },
+        required: ["epic_key"],
       },
     },
   },
@@ -208,6 +237,37 @@ When user says "sprint 24", find "Sprint 24" in the results and use its id (e.g.
           limit: {
             type: "number",
             description: "Max sprints (default: 20)",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.LIST_EPICS,
+      description: `List all epics in the project. Use this when user asks about epics.
+
+Examples:
+- list_epics() - all epics
+- list_epics(status: ["In Progress"]) - only in-progress epics
+- list_epics(limit: 10) - first 10 epics
+
+Returns: { total_epics, epics: [{ key, summary, status, assignee }] }
+
+For detailed epic progress with child issues, use get_epic_progress(epic_key) after identifying the epic.`,
+      parameters: {
+        type: "object",
+        properties: {
+          status: {
+            type: "array",
+            items: { type: "string" },
+            description: "Filter by epic status (e.g. ['In Progress', 'To Do'])",
+          },
+          limit: {
+            type: "number",
+            description: "Max epics to return (default: 50)",
           },
         },
         required: [],
@@ -423,6 +483,35 @@ mapping object: { summary_column, description_column, assignee, story_points, sp
           },
         },
         required: ["mapping"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: TOOL_NAMES.GET_EPIC_PROGRESS,
+      description: `Get progress and completion status for an epic, including all child stories.
+
+Examples:
+- get_epic_progress(epic_key: "ODPP-1234") - get progress for epic ODPP-1234
+
+Returns: { epic: {...}, progress: { total_issues, completed_issues, percent_by_count, percent_by_points }, breakdown_by_status: {...} }
+
+The UI will automatically render a progress card with visual breakdown.`,
+      parameters: {
+        type: "object",
+        properties: {
+          epic_key: {
+            type: "string",
+            description: "The epic issue key (e.g. ODPP-1234)",
+          },
+          include_subtasks: {
+            type: "boolean",
+            description:
+              "Include subtasks of child stories (default: false)",
+          },
+        },
+        required: ["epic_key"],
       },
     },
   },

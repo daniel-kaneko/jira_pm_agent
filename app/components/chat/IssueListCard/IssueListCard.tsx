@@ -13,6 +13,7 @@ export interface IssueData {
   status: string;
   assignee: string | null;
   story_points: number | null;
+  issue_type?: string;
 }
 
 export interface IssueListData {
@@ -43,9 +44,10 @@ const BREAKDOWN_PREVIEW_COUNT = 5;
  * Export issues to CSV
  */
 function exportIssues(issues: IssueData[], sprintName: string): void {
-  const headers = ["Key", "Summary", "Status", "Assignee", "Story Points"];
+  const headers = ["Key", "Type", "Summary", "Status", "Assignee", "Story Points"];
   const rows = issues.map((issue) => [
     issue.key,
+    issue.issue_type || "Story",
     issue.summary,
     issue.status,
     issue.assignee || "Unassigned",
@@ -425,6 +427,11 @@ export function IssueListCard({ data }: IssueListCardProps) {
                       </span>
                     </div>
                     <div className="text-xs text-[var(--fg-muted)] mt-0.5">
+                      {issue.issue_type && (
+                        <span className={issue.issue_type === "Epic" ? "text-[var(--purple)]" : ""}>
+                          {issue.issue_type} •{" "}
+                        </span>
+                      )}
                       {issue.status} • {issue.assignee || "Unassigned"} •{" "}
                       {issue.story_points ?? "—"} pts
                     </div>

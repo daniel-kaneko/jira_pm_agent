@@ -11,6 +11,7 @@ import type { StreamEvent, CachedIssue } from "@/lib/types";
 import {
   isIssueListStructuredData,
   isActivityListStructuredData,
+  isEpicProgressStructuredData,
   isPendingAction,
 } from "@/lib/types";
 import { formatToolArgValue } from "@/lib/utils";
@@ -128,6 +129,8 @@ function handleStructuredData(
       sprintName: event.data.sprint_name,
     };
   } else if (event.data && isActivityListStructuredData(event.data)) {
+    refs.structuredData.current = [...refs.structuredData.current, event.data];
+  } else if (event.data && isEpicProgressStructuredData(event.data)) {
     refs.structuredData.current = [...refs.structuredData.current, event.data];
   }
 }

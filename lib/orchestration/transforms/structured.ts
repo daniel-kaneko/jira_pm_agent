@@ -5,6 +5,7 @@
 import type {
   IssueListStructuredData,
   ActivityListStructuredData,
+  EpicProgressStructuredData,
   StructuredDataItem,
   SprintIssuesResult,
   AnalyzeCachedDataResult,
@@ -29,6 +30,41 @@ interface GetActivityResult {
     changed_by: string;
     changed_at: string;
   }>;
+}
+
+/** Result structure from get_epic_progress tool */
+interface GetEpicProgressResult {
+  epic: {
+    key: string;
+    key_link: string;
+    summary: string;
+    status: string;
+    assignee: string | null;
+  };
+  progress: {
+    total_issues: number;
+    completed_issues: number;
+    total_story_points: number;
+    completed_story_points: number;
+    percent_by_count: number;
+    percent_by_points: number;
+  };
+  breakdown_by_status: Record<
+    string,
+    {
+      count: number;
+      story_points: number;
+      issues: Array<{
+        key: string;
+        key_link: string;
+        summary: string;
+        status: string;
+        assignee: string | null;
+        story_points: number | null;
+        issue_type: string;
+      }>;
+    }
+  >;
 }
 
 /**
@@ -107,6 +143,58 @@ function extractFromActivity(
 }
 
 /**
+ * Extract structured data from get_epic_progress result.
+ */
+function extractFromEpicProgress(
+  result: GetEpicProgressResult
+): EpicProgressStructuredData[] {
+  return [
+    {
+      type: "epic_progress" as const,
+      epic: result.epic,
+      progress: result.progress,
+      breakdown_by_status: result.breakdown_by_status,
+    },
+  ];
+}
+
+/** Result structure from list_epics tool */
+interface ListEpicsResult {
+  total_epics: number;
+  epics: Array<{
+    key: string;
+    key_link: string;
+    summary: string;
+    status: string;
+    assignee: string | null;
+  }>;
+}
+
+/**
+ * Extract structured data from list_epics result.
+ */
+function extractFromListEpics(result: ListEpicsResult): StructuredDataItem[] {
+  if (!result.epics || result.epics.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      type: "issue_list" as const,
+      summary: `${result.total_epics} epics`,
+      total_issues: result.total_epics,
+      total_story_points: 0,
+      sprint_name: "Project Epics",
+      issues: result.epics.map((epic) => ({
+        ...epic,
+        story_points: null,
+        issue_type: "Epic",
+      })),
+    },
+  ];
+}
+
+/**
  * Extract structured data from tool results for UI rendering.
  * @param toolName - Name of the tool that produced the result.
  * @param result - Raw result from the tool.
@@ -128,6 +216,14 @@ export function extractStructuredData(
 
   if (toolName === TOOL_NAMES.GET_ACTIVITY) {
     return extractFromActivity(result as GetActivityResult);
+  }
+
+  if (toolName === TOOL_NAMES.GET_EPIC_PROGRESS) {
+    return extractFromEpicProgress(result as GetEpicProgressResult);
+  }
+
+  if (toolName === TOOL_NAMES.LIST_EPICS) {
+    return extractFromListEpics(result as ListEpicsResult);
   }
 
   return [];

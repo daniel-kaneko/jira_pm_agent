@@ -43,16 +43,13 @@ function resolveSprintId(
   sprintId: number,
   allSprints: JiraSprint[]
 ): number {
-  // If it's already a proper ID (>= 1000), use as-is
   if (sprintId >= 1000) {
     return sprintId;
   }
 
-  // It looks like a sprint NUMBER (e.g., 28), resolve it
   const sprintNumber = sprintId;
   const matched = allSprints.find((s) => {
     const nameLower = s.name.toLowerCase();
-    // Match "Sprint 28", "ODP Sprint 28", etc.
     return (
       nameLower.includes(`sprint ${sprintNumber}`) ||
       nameLower.endsWith(` ${sprintNumber}`) ||
@@ -146,6 +143,7 @@ export async function handleGetSprintIssues(
         status: issue.status,
         assignee: issue.assignee,
         story_points: issue.story_points,
+        issue_type: issue.issue_type,
       }));
 
       return {
@@ -266,8 +264,7 @@ export async function handleCreateIssues(
     if (result.status === "created" && result.key) {
       const issueKey = result.key;
       let targetSprintId = originalIssue.sprint_id ?? activeSprintId;
-      
-      // Resolve sprint number to ID if needed
+
       if (targetSprintId && originalIssue.sprint_id) {
         try {
           targetSprintId = resolveSprintId(originalIssue.sprint_id, allSprints);
@@ -276,7 +273,7 @@ export async function handleCreateIssues(
             `[createIssues] Failed to resolve sprint for ${issueKey}:`,
             resolveError instanceof Error ? resolveError.message : resolveError
           );
-          targetSprintId = activeSprintId; // Fall back to active sprint
+          targetSprintId = activeSprintId;
         }
       }
       
@@ -343,7 +340,6 @@ export async function handleUpdateIssues(
 
   const client = createJiraClient(config);
 
-  // Check if any issues need sprint updates
   const needsSprintLookup = issues.some((i) => i.sprint_id !== undefined);
 
   const [storyPointsFieldId, cachedTeam, allSprints] = await Promise.all([
@@ -416,7 +412,6 @@ export async function handleUpdateIssues(
         await withRetry(() =>
           client.moveIssuesToSprint(resolvedSprintId, [issue.issue_key])
         );
-        // Show both the user's input and the resolved ID for clarity
         const sprintInfo = allSprints.find((s) => s.id === resolvedSprintId);
         const sprintDisplay = sprintInfo
           ? `${sprintInfo.name}`

@@ -44,6 +44,45 @@ export interface ActivityListStructuredData {
   changes: ActivityChange[];
 }
 
+/** Epic progress issue data */
+interface EpicProgressIssue {
+  key: string;
+  key_link: string;
+  summary: string;
+  status: string;
+  assignee: string | null;
+  story_points: number | null;
+  issue_type: string;
+}
+
+/** Structured data for epic progress display */
+export interface EpicProgressStructuredData {
+  type: "epic_progress";
+  epic: {
+    key: string;
+    key_link: string;
+    summary: string;
+    status: string;
+    assignee: string | null;
+  };
+  progress: {
+    total_issues: number;
+    completed_issues: number;
+    total_story_points: number;
+    completed_story_points: number;
+    percent_by_count: number;
+    percent_by_points: number;
+  };
+  breakdown_by_status: Record<
+    string,
+    {
+      count: number;
+      story_points: number;
+      issues: EpicProgressIssue[];
+    }
+  >;
+}
+
 /**
  * Type guard to check if a value is a valid IssueData object.
  * @param value - The value to check.
@@ -104,6 +143,26 @@ export function isActivityListStructuredData(
   if (typeof obj.total_changes !== "number") return false;
   if (!Array.isArray(obj.changes)) return false;
   if (typeof obj.period !== "object" || obj.period === null) return false;
+
+  return true;
+}
+
+/**
+ * Type guard to check if a value is a valid EpicProgressStructuredData object.
+ * @param value - The value to check.
+ * @returns True if the value matches EpicProgressStructuredData structure.
+ */
+export function isEpicProgressStructuredData(
+  value: unknown
+): value is EpicProgressStructuredData {
+  if (typeof value !== "object" || value === null) return false;
+
+  const obj = value as Record<string, unknown>;
+  if (obj.type !== "epic_progress") return false;
+  if (typeof obj.epic !== "object" || obj.epic === null) return false;
+  if (typeof obj.progress !== "object" || obj.progress === null) return false;
+  if (typeof obj.breakdown_by_status !== "object" || obj.breakdown_by_status === null)
+    return false;
 
   return true;
 }

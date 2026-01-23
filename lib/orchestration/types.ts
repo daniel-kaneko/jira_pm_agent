@@ -12,6 +12,7 @@ export interface IssueData {
   status: string;
   assignee: string | null;
   story_points: number | null;
+  issue_type?: string;
 }
 
 /** Result from get_sprint_issues tool */
@@ -51,9 +52,49 @@ export interface ActivityListStructuredData {
   changes: ActivityChange[];
 }
 
+/** Epic progress issue data */
+export interface EpicProgressIssue {
+  key: string;
+  key_link: string;
+  summary: string;
+  status: string;
+  assignee: string | null;
+  story_points: number | null;
+  issue_type: string;
+}
+
+/** Structured data for epic progress display */
+export interface EpicProgressStructuredData {
+  type: "epic_progress";
+  epic: {
+    key: string;
+    key_link: string;
+    summary: string;
+    status: string;
+    assignee: string | null;
+  };
+  progress: {
+    total_issues: number;
+    completed_issues: number;
+    total_story_points: number;
+    completed_story_points: number;
+    percent_by_count: number;
+    percent_by_points: number;
+  };
+  breakdown_by_status: Record<
+    string,
+    {
+      count: number;
+      story_points: number;
+      issues: EpicProgressIssue[];
+    }
+  >;
+}
+
 export type StructuredDataItem =
   | IssueListStructuredData
-  | ActivityListStructuredData;
+  | ActivityListStructuredData
+  | EpicProgressStructuredData;
 
 /** Result from query_csv tool */
 export interface QueryCSVResult {

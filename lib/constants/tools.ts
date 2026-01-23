@@ -6,12 +6,14 @@
 /** Available tool names in the system */
 export const TOOL_NAMES = {
   LIST_SPRINTS: "list_sprints",
+  LIST_EPICS: "list_epics",
   GET_CONTEXT: "get_context",
   QUERY_CSV: "query_csv",
   PREPARE_ISSUES: "prepare_issues",
   GET_SPRINT_ISSUES: "get_sprint_issues",
   GET_ISSUE: "get_issue",
   GET_ACTIVITY: "get_activity",
+  GET_EPIC_PROGRESS: "get_epic_progress",
   CREATE_ISSUES: "create_issues",
   UPDATE_ISSUES: "update_issues",
   ANALYZE_CACHED_DATA: "analyze_cached_data",

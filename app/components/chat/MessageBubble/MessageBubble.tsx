@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import { MessageBubbleProps } from "./types";
 import { IssueListCard, IssueListData } from "../IssueListCard";
 import { ActivityCard, ActivityListData } from "../ActivityCard";
+import { EpicProgressCard, EpicProgressData } from "../EpicProgressCard";
 import { SprintComparisonCard } from "../SprintComparisonCard";
 import { TypingIndicator } from "../TypingIndicator";
 import { useStreamedText } from "@/hooks/useStreamedText";
@@ -101,6 +102,9 @@ export function MessageBubble({
       const activityLists = structuredData.filter(
         (data): data is ActivityListData => data.type === "activity_list"
       );
+      const epicProgressLists = structuredData.filter(
+        (data): data is EpicProgressData => data.type === "epic_progress"
+      );
 
       return (
         <div className="space-y-3">
@@ -121,6 +125,9 @@ export function MessageBubble({
           ) : null}
           {activityLists.map((activity, idx) => (
             <ActivityCard key={`activity-${idx}`} data={activity} />
+          ))}
+          {epicProgressLists.map((epicProgress, idx) => (
+            <EpicProgressCard key={`epic-progress-${idx}`} data={epicProgress} />
           ))}
         </div>
       );

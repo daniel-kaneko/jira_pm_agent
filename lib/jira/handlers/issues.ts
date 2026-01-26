@@ -213,13 +213,20 @@ export async function handleCreateIssues(
   const client = createJiraClient(config);
   const boardId = getBoardId(config);
 
-  const [boardInfo, storyPointsFieldId, cachedTeam, allSprints] =
+  const [boardInfo, storyPointsFieldId, cachedTeam, cachedSprints] =
     await Promise.all([
       client.getBoardInfo(boardId),
       getStoryPointsFieldId(config.id),
       getCachedTeamMembers(config.id),
       getCachedSprints(config.id),
     ]);
+
+  const futureSprints = await client.listSprints(boardId, "future", 50);
+  const cachedSprintIds = new Set(cachedSprints.map((s) => s.id));
+  const allSprints = [
+    ...cachedSprints,
+    ...futureSprints.filter((s) => !cachedSprintIds.has(s.id)),
+  ];
 
   const activeSprint = allSprints.find((s) => s.state === "active");
   const activeSprintId = activeSprint?.id ?? null;
@@ -339,14 +346,25 @@ export async function handleUpdateIssues(
   }
 
   const client = createJiraClient(config);
+  const boardId = getBoardId(config);
 
   const needsSprintLookup = issues.some((i) => i.sprint_id !== undefined);
 
-  const [storyPointsFieldId, cachedTeam, allSprints] = await Promise.all([
+  const [storyPointsFieldId, cachedTeam, cachedSprints] = await Promise.all([
     getStoryPointsFieldId(config.id),
     getCachedTeamMembers(config.id),
     needsSprintLookup ? getCachedSprints(config.id) : Promise.resolve([]),
   ]);
+
+  let allSprints = cachedSprints;
+  if (needsSprintLookup) {
+    const futureSprints = await client.listSprints(boardId, "future", 50);
+    const cachedSprintIds = new Set(cachedSprints.map((s) => s.id));
+    allSprints = [
+      ...cachedSprints,
+      ...futureSprints.filter((s) => !cachedSprintIds.has(s.id)),
+    ];
+  }
 
   const results: BulkOperationResult[] = [];
   let succeeded = 0;
@@ -408,7 +426,18 @@ export async function handleUpdateIssues(
       }
 
       if (issue.sprint_id) {
-        const resolvedSprintId = resolveSprintId(issue.sprint_id, allSprints);
+        let resolvedSprintId: number;
+        try {
+          resolvedSprintId = resolveSprintId(issue.sprint_id, allSprints);
+        } catch (resolveError) {
+          const errorMsg = resolveError instanceof Error ? resolveError.message : String(resolveError);
+          throw new Error(
+            `Failed to resolve sprint ${issue.sprint_id}: ${errorMsg}. Available sprints: ${allSprints
+              .slice(0, 10)
+              .map((s) => `${s.name} (${s.state}, ID: ${s.id})`)
+              .join(", ")}`
+          );
+        }
         await withRetry(() =>
           client.moveIssuesToSprint(resolvedSprintId, [issue.issue_key])
         );

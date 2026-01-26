@@ -95,7 +95,7 @@ export function ChatInput({
             <span className="mx-2">·</span>
             <span className="text-[var(--fg-dim)]">Shift+Enter</span> newline
           </span>
-          <span>ollama + chroma / MVP by @daniel-kaneko</span>
+          <span>ollama + Jira / MVP by @daniel-kaneko</span>
         </div>
       </div>
     </footer>

@@ -229,6 +229,7 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
     let totalStoryPoints = 0;
     let completedStoryPoints = 0;
     let weightedProgressSum = 0;
+    const statusCounts: Record<string, number> = {};
 
     for (const epic of reportData.epics) {
       totalIssues += epic.progress.total_issues;
@@ -239,6 +240,9 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
       const epicWeight = epic.progress.total_issues;
       const epicWeightedPercent = epic.progress.percent_by_points;
       weightedProgressSum += epicWeightedPercent * epicWeight;
+
+      const status = epic.epic.status;
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
     }
 
     const percentByCount =
@@ -257,6 +261,7 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
       completedStoryPoints,
       percentByCount,
       percentByPoints: weightedPercent,
+      statusCounts,
     };
   };
 
@@ -535,6 +540,24 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
                   />
                 </div>
               </div>
+              {summary.statusCounts && Object.keys(summary.statusCounts).length > 0 && (
+                <div className="mt-4 pt-4 border-t border-[var(--bg-highlight)]">
+                  <div className="text-xs text-[var(--fg-muted)] mb-2">Epic Status Breakdown</div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(summary.statusCounts)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([status, count]) => (
+                        <div
+                          key={status}
+                          className="px-2 py-1 bg-[var(--bg)] rounded text-xs text-[var(--fg)] border border-[var(--bg-highlight)]"
+                        >
+                          <span className="text-[var(--fg-muted)]">{status}:</span>{" "}
+                          <span className="font-medium">{count}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

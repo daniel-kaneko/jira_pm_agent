@@ -83,50 +83,57 @@ function sortStatuses(statuses: string[]): string[] {
 const PREVIEW_COUNT = 3;
 
 /**
- * Get completion percentage for a status based on weighted story points calculation.
+ * Get completion percentage for a status based on weighted calculation.
  * @param status - The status name (e.g., "In Progress", "UAT")
  * @returns Completion percentage as a decimal (0.0 to 1.0)
  */
 function getStatusCompletionPercentage(status: string): number {
   const statusLower = status.toLowerCase().trim();
 
-  if (statusLower.includes("done") || statusLower.includes("conclu") || statusLower === "complete") {
+  if (statusLower === "completed" || statusLower === "done" || statusLower === "complete") {
     return 1.0;
   }
 
   if (
-    statusLower.includes("uat") ||
-    statusLower === "uat" ||
-    statusLower.includes("user acceptance testing") ||
-    statusLower.includes("qa in progress")
+    statusLower.includes("in review") ||
+    statusLower.includes("integration test") ||
+    statusLower.includes("qa failed") ||
+    statusLower.includes("qa approved") ||
+    statusLower.includes("code review") ||
+    statusLower.includes("qa in progress") ||
+    statusLower.includes("pending qa") ||
+    statusLower.includes("approved for release") ||
+    statusLower.includes("uat failed") ||
+    statusLower.includes("uat in progress") ||
+    statusLower === "uat"
   ) {
     return 0.75;
-  }
-
-  if (
-    statusLower.includes("ready for qa") ||
-    statusLower === "ready for qa" ||
-    statusLower.includes("ready for testing") ||
-    statusLower.includes("qa ready")
-  ) {
-    return 0.5;
   }
 
   if (
     statusLower.includes("in progress") ||
     statusLower === "in progress" ||
     statusLower === "inprogress" ||
-    statusLower.includes("in development")
+    statusLower.includes("blocked")
   ) {
     return 0.5;
   }
 
   if (
+    statusLower.includes("in refinement") ||
     statusLower.includes("ready to develop") ||
     statusLower === "ready to develop" ||
     statusLower.includes("ready for development")
   ) {
     return 0.25;
+  }
+
+  if (
+    statusLower === "requested" ||
+    statusLower === "open" ||
+    statusLower === "backlog"
+  ) {
+    return 0.0;
   }
 
   return 0.0;

@@ -3,7 +3,7 @@
  */
 
 import { createJiraClient } from "../client";
-import { getStoryPointsFieldId } from "../cache";
+import { getStoryPointsFieldId, getSprintFieldId } from "../cache";
 import type {
   JiraProjectConfig,
   ToolResultMap,
@@ -17,7 +17,7 @@ type ListEpicsResult = ToolResultMap["list_epics"];
 const DONE_CATEGORIES = ["done"];
 
 /**
- * Get completion percentage for a status based on weighted story points calculation.
+ * Get completion percentage for a status based on weighted calculation.
  * @param status - The status name (e.g., "In Progress", "UAT")
  * @param statusCategory - The Jira status category key (e.g., "done", "indeterminate")
  * @returns Completion percentage as a decimal (0.0 to 1.0)
@@ -28,43 +28,55 @@ function getStatusCompletionPercentage(
 ): number {
   const statusLower = status.toLowerCase().trim();
 
-  if (statusCategory === "done" || statusLower === "complete") {
+  if (
+    statusCategory === "done" ||
+    statusLower === "completed" ||
+    statusLower === "done" ||
+    statusLower === "complete"
+  ) {
     return 1.0;
   }
 
   if (
-    statusLower.includes("uat") ||
-    statusLower === "uat" ||
-    statusLower.includes("user acceptance testing") ||
-    statusLower.includes("qa in progress")
+    statusLower.includes("in review") ||
+    statusLower.includes("integration test") ||
+    statusLower.includes("qa failed") ||
+    statusLower.includes("qa approved") ||
+    statusLower.includes("code review") ||
+    statusLower.includes("qa in progress") ||
+    statusLower.includes("pending qa") ||
+    statusLower.includes("approved for release") ||
+    statusLower.includes("uat failed") ||
+    statusLower.includes("uat in progress") ||
+    statusLower === "uat"
   ) {
     return 0.75;
-  }
-
-  if (
-    statusLower.includes("ready for qa") ||
-    statusLower === "ready for qa" ||
-    statusLower.includes("ready for testing") ||
-    statusLower.includes("qa ready")
-  ) {
-    return 0.5;
   }
 
   if (
     statusLower.includes("in progress") ||
     statusLower === "in progress" ||
     statusLower === "inprogress" ||
-    statusLower.includes("in development")
+    statusLower.includes("blocked")
   ) {
     return 0.5;
   }
 
   if (
+    statusLower.includes("in refinement") ||
     statusLower.includes("ready to develop") ||
     statusLower === "ready to develop" ||
     statusLower.includes("ready for development")
   ) {
     return 0.25;
+  }
+
+  if (
+    statusLower === "requested" ||
+    statusLower === "open" ||
+    statusLower === "backlog"
+  ) {
+    return 0.0;
   }
 
   return 0.0;
@@ -168,18 +180,23 @@ export async function handleGetEpicProgress(
   }
 
   const client = createJiraClient(config);
-  const storyPointsFieldId = await getStoryPointsFieldId(config.id);
+  const [storyPointsFieldId, sprintFieldId] = await Promise.all([
+    getStoryPointsFieldId(config.id),
+    getSprintFieldId(config.id),
+  ]);
 
   const epicData = await client.getIssue(epicKey, storyPointsFieldId);
 
+  const componentFilter = `component = "web experience track"`;
   const jql = includeSubtasks
-    ? `parent = ${epicKey} OR "Epic Link" = ${epicKey}`
-    : `(parent = ${epicKey} OR "Epic Link" = ${epicKey}) AND issuetype != Sub-task`;
+    ? `(parent = ${epicKey} OR "Epic Link" = ${epicKey}) AND ${componentFilter}`
+    : `(parent = ${epicKey} OR "Epic Link" = ${epicKey}) AND issuetype != Sub-task AND ${componentFilter}`;
 
   const childIssues = await fetchIssuesByJQL(
     config,
     jql,
-    storyPointsFieldId
+    storyPointsFieldId,
+    sprintFieldId
   );
 
   let totalIssues = 0;
@@ -234,6 +251,9 @@ export async function handleGetEpicProgress(
       assignee: issue.assignee,
       story_points: issue.story_points,
       issue_type: issue.issue_type,
+      fix_versions: issue.fix_versions,
+      priority: issue.priority,
+      sprint: issue.sprint,
     });
   }
 
@@ -297,7 +317,8 @@ export async function handleGetEpicProgress(
 async function fetchIssuesByJQL(
   config: JiraProjectConfig,
   jql: string,
-  storyPointsFieldId: string | null
+  storyPointsFieldId: string | null,
+  sprintFieldId: string | null
 ): Promise<
   Array<{
     key: string;
@@ -307,6 +328,9 @@ async function fetchIssuesByJQL(
     assignee: string | null;
     story_points: number | null;
     issue_type: string;
+    fix_versions: string[];
+    priority: string | null;
+    sprint: string | null;
   }>
 > {
   const client = createJiraClient(config);
@@ -318,11 +342,17 @@ async function fetchIssuesByJQL(
     assignee: string | null;
     story_points: number | null;
     issue_type: string;
+    fix_versions: string[];
+    priority: string | null;
+    sprint: string | null;
   }> = [];
 
-  const fields = ["summary", "status", "assignee", "issuetype"];
+  const fields = ["summary", "status", "assignee", "issuetype", "fixVersions", "priority"];
   if (storyPointsFieldId) {
     fields.push(storyPointsFieldId);
+  }
+  if (sprintFieldId) {
+    fields.push(sprintFieldId);
   }
 
   let nextPageToken: string | undefined;
@@ -343,6 +373,33 @@ async function fetchIssuesByJQL(
 
     for (const issue of issues) {
       const issueFields = issue.fields as Record<string, unknown>;
+      
+      if (process.env.NODE_ENV === "development" && issues.indexOf(issue) === 0) {
+        console.log("[Epic Handler] Sprint field ID being used:", sprintFieldId);
+        console.log("[Epic Handler] Sample issue fields:", Object.keys(issueFields));
+        const customFields = Object.keys(issueFields).filter((key) => key.startsWith("customfield_"));
+        console.log("[Epic Handler] Custom fields found:", customFields);
+        if (sprintFieldId) {
+          const sprintFieldValue = issueFields[sprintFieldId];
+          console.log(`[Epic Handler] ${sprintFieldId} value:`, sprintFieldValue);
+          console.log(`[Epic Handler] ${sprintFieldId} value (JSON):`, JSON.stringify(sprintFieldValue, null, 2));
+          console.log(`[Epic Handler] ${sprintFieldId} type:`, typeof sprintFieldValue);
+          console.log(`[Epic Handler] ${sprintFieldId} isArray:`, Array.isArray(sprintFieldValue));
+          console.log(`[Epic Handler] ${sprintFieldId} isNull:`, sprintFieldValue === null);
+          console.log(`[Epic Handler] ${sprintFieldId} isUndefined:`, sprintFieldValue === undefined);
+          if (Array.isArray(sprintFieldValue)) {
+            console.log(`[Epic Handler] ${sprintFieldId} array length:`, sprintFieldValue.length);
+            if (sprintFieldValue.length > 0) {
+              console.log(`[Epic Handler] ${sprintFieldId} first item:`, JSON.stringify(sprintFieldValue[0], null, 2));
+            }
+          } else if (sprintFieldValue && typeof sprintFieldValue === "object") {
+            console.log(`[Epic Handler] ${sprintFieldId} object keys:`, Object.keys(sprintFieldValue));
+          }
+        } else {
+          console.log(`[Epic Handler] Sprint field not discovered`);
+        }
+      }
+      
       const statusObj = issueFields.status as Record<string, unknown>;
       const statusCategory = statusObj?.statusCategory as Record<
         string,
@@ -352,6 +409,58 @@ async function fetchIssuesByJQL(
         string,
         unknown
       > | null;
+      const fixVersionsData = (issueFields.fixVersions as Array<Record<string, unknown>>) || [];
+      const fixVersions = fixVersionsData.map((version) => (version.name as string) || "").filter(Boolean);
+      const priorityData = issueFields.priority as Record<string, unknown> | null;
+      const priority = priorityData ? (priorityData.name as string) || null : null;
+      
+      if (priority && priority.toLowerCase() === "unknown") {
+        continue;
+      }
+      
+      let sprint: string | null = null;
+      const sprintField = sprintFieldId ? issueFields[sprintFieldId] : undefined;
+      
+      if (sprintField !== null && sprintField !== undefined) {
+        if (Array.isArray(sprintField)) {
+          const sprintArray = sprintField as Array<Record<string, unknown>>;
+          if (sprintArray.length > 0) {
+            const lastSprint = sprintArray[sprintArray.length - 1];
+            if (lastSprint.name) {
+              sprint = lastSprint.name as string;
+            } else if (lastSprint.state) {
+              sprint = lastSprint.state as string;
+            } else if (lastSprint.id) {
+              sprint = `Sprint ${lastSprint.id}`;
+            }
+          }
+        } else if (typeof sprintField === "object") {
+          const sprintObj = sprintField as Record<string, unknown>;
+          if (sprintObj.name) {
+            sprint = sprintObj.name as string;
+          } else if (sprintObj.state) {
+            sprint = sprintObj.state as string;
+          } else if (sprintObj.id) {
+            sprint = `Sprint ${sprintObj.id}`;
+          }
+        } else if (typeof sprintField === "string") {
+          if (sprintField.trim().length > 0) {
+            try {
+              const parsed = JSON.parse(sprintField);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const lastSprint = parsed[parsed.length - 1];
+                sprint = lastSprint?.name || (lastSprint?.id ? `Sprint ${lastSprint.id}` : null);
+              } else if (parsed && typeof parsed === "object") {
+                sprint = parsed.name || (parsed.id ? `Sprint ${parsed.id}` : null);
+              }
+            } catch {
+              sprint = sprintField;
+            }
+          }
+        } else if (typeof sprintField === "number") {
+          sprint = `Sprint ${sprintField}`;
+        }
+      }
 
       allIssues.push({
         key: issue.key as string,
@@ -364,6 +473,9 @@ async function fetchIssuesByJQL(
           : null,
         issue_type: (issueFields.issuetype as Record<string, unknown>)
           ?.name as string,
+        fix_versions: fixVersions,
+        priority: priority,
+        sprint: sprint,
       });
     }
 

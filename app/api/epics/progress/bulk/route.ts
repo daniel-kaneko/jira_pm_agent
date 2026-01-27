@@ -5,37 +5,37 @@ import { RETRY_DELAY_MS, MAX_RETRIES } from "@/lib/constants";
 import type { JiraProjectConfig } from "@/lib/jira/types";
 
 type EpicProgressData = {
-  epic: {
-    key: string;
-    key_link: string;
-    summary: string;
-    status: string;
-    assignee: string | null;
-  };
-  progress: {
-    total_issues: number;
-    completed_issues: number;
-    total_story_points: number;
-    completed_story_points: number;
-    percent_by_count: number;
-    percent_by_points: number;
-  };
-  breakdown_by_status: Record<
-    string,
-    {
-      count: number;
-      story_points: number;
-      issues: Array<{
+      epic: {
         key: string;
         key_link: string;
         summary: string;
         status: string;
         assignee: string | null;
-        story_points: number | null;
-        issue_type: string;
-      }>;
-    }
-  >;
+      };
+      progress: {
+        total_issues: number;
+        completed_issues: number;
+        total_story_points: number;
+        completed_story_points: number;
+        percent_by_count: number;
+        percent_by_points: number;
+      };
+      breakdown_by_status: Record<
+        string,
+        {
+          count: number;
+          story_points: number;
+          issues: Array<{
+            key: string;
+            key_link: string;
+            summary: string;
+            status: string;
+            assignee: string | null;
+            story_points: number | null;
+            issue_type: string;
+          }>;
+        }
+      >;
 };
 
 /**

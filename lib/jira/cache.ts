@@ -17,6 +17,11 @@ const FIELD_SEARCHES = [
     patterns: [/^story\s*points?$/i],
     fallbackIncludes: "story point",
   },
+  {
+    key: "sprint",
+    patterns: [/^sprint$/i, /^sprints?$/i],
+    fallbackIncludes: "sprint",
+  },
 ] as const;
 
 type FieldKey = (typeof FIELD_SEARCHES)[number]["key"];
@@ -253,3 +258,7 @@ export async function getFieldId(
 export const getStoryPointsFieldId = (
   configId: string
 ): Promise<string | null> => getFieldId(configId, "storyPoints");
+
+export const getSprintFieldId = (
+  configId: string
+): Promise<string | null> => getFieldId(configId, "sprint");

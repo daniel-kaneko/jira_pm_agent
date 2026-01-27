@@ -315,6 +315,9 @@ export interface EpicProgressIssue {
   assignee: string | null;
   story_points: number | null;
   issue_type: string;
+  fix_versions: string[];
+  priority: string | null;
+  sprint: string | null;
 }
 
 export type ToolArgsMap = {

@@ -35,6 +35,7 @@ interface CacheData {
 }
 
 const cacheStore = new Map<string, CacheData>();
+const refreshPromises = new Map<string, Promise<CacheData>>();
 
 function isCacheValid(configId: string): boolean {
   const cache = cacheStore.get(configId);
@@ -79,7 +80,7 @@ async function fetchStatusesAndTeam(
 /**
  * Find custom fields from Jira fields using configured search patterns.
  */
-function findFields(fields: JiraField[]): FieldMappings {
+function findFields(fields: JiraField[], configId: string): FieldMappings {
   const result = {} as FieldMappings;
 
   for (const search of FIELD_SEARCHES) {
@@ -90,7 +91,10 @@ function findFields(fields: JiraField[]): FieldMappings {
         (field) => field.custom && pattern.test(field.name)
       );
       if (match) {
-        console.log(`[Cache] Found ${search.key}: ${match.id} - ${match.name}`);
+        const existingCache = cacheStore.get(configId);
+        if (!existingCache || existingCache.fieldMappings[search.key] !== match.id) {
+          console.log(`[Cache] Found ${search.key}: ${match.id} - ${match.name}`);
+        }
         fieldId = match.id;
         break;
       }
@@ -103,14 +107,22 @@ function findFields(fields: JiraField[]): FieldMappings {
           field.name.toLowerCase().includes(search.fallbackIncludes)
       );
       if (fallback) {
-        console.log(
-          `[Cache] Found ${search.key} (fallback): ${fallback.id} - ${fallback.name}`
-        );
+        const existingCache = cacheStore.get(configId);
+        if (!existingCache || existingCache.fieldMappings[search.key] !== fallback.id) {
+          console.log(
+            `[Cache] Found ${search.key} (fallback): ${fallback.id} - ${fallback.name}`
+          );
+        }
         fieldId = fallback.id;
       }
     }
 
-    if (!fieldId) console.log(`[Cache] ${search.key} field not found`);
+    if (!fieldId) {
+      const existingCache = cacheStore.get(configId);
+      if (!existingCache || existingCache.fieldMappings[search.key] !== null) {
+        console.log(`[Cache] ${search.key} field not found`);
+      }
+    }
     result[search.key] = fieldId;
   }
 
@@ -122,7 +134,18 @@ function findFields(fields: JiraField[]): FieldMappings {
  */
 async function ensureCache(configId: string): Promise<CacheData> {
   if (isCacheValid(configId)) return cacheStore.get(configId)!;
-  return refreshCache(configId);
+  
+  const existingRefresh = refreshPromises.get(configId);
+  if (existingRefresh) {
+    return existingRefresh;
+  }
+  
+  const refreshPromise = refreshCache(configId).finally(() => {
+    refreshPromises.delete(configId);
+  });
+  
+  refreshPromises.set(configId, refreshPromise);
+  return refreshPromise;
 }
 
 /**
@@ -142,7 +165,7 @@ export async function refreshCache(configId: string): Promise<CacheData> {
       client.getPriorities(),
     ]);
 
-  const fieldMappings = findFields(fields);
+  const fieldMappings = findFields(fields, configId);
   const { statuses, teamMembers } = await fetchStatusesAndTeam(
     config,
     fieldMappings.storyPoints

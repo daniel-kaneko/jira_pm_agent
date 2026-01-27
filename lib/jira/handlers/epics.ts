@@ -28,7 +28,7 @@ function getStatusCompletionPercentage(
 ): number {
   const statusLower = status.toLowerCase().trim();
 
-  if (statusCategory === "done") {
+  if (statusCategory === "done" || statusLower === "complete") {
     return 1.0;
   }
 
@@ -209,7 +209,8 @@ export async function handleGetEpicProgress(
     const weightedPoints = points * completionPercentage;
     completedStoryPoints += weightedPoints;
 
-    const isDone = DONE_CATEGORIES.includes(issue.statusCategory);
+    const isDone = DONE_CATEGORIES.includes(issue.statusCategory) || 
+                   issue.status.toLowerCase().trim() === "complete";
     if (isDone) {
       completedIssues++;
     }

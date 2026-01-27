@@ -90,7 +90,7 @@ const PREVIEW_COUNT = 3;
 function getStatusCompletionPercentage(status: string): number {
   const statusLower = status.toLowerCase().trim();
 
-  if (statusLower.includes("done") || statusLower.includes("conclu")) {
+  if (statusLower.includes("done") || statusLower.includes("conclu") || statusLower === "complete") {
     return 1.0;
   }
 

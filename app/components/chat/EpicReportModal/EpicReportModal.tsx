@@ -50,6 +50,67 @@ interface EpicReportResponse {
 type SortField = "key" | "summary" | "progress" | "issues" | "status" | "assignee";
 type SortOrder = "asc" | "desc";
 
+/**
+ * Get completion percentage for a status based on weighted calculation.
+ * @param status - The status name (e.g., "In Progress", "UAT")
+ * @returns Completion percentage as a decimal (0.0 to 1.0)
+ */
+function getStatusCompletionPercentage(status: string): number {
+  const statusLower = status.toLowerCase().trim();
+
+  if (
+    statusLower.includes("done") ||
+    statusLower.includes("conclu") ||
+    statusLower === "complete" ||
+    statusLower.includes("approved for release")
+  ) {
+    return 1.0;
+  }
+
+  if (
+    statusLower.includes("uat") ||
+    statusLower === "uat" ||
+    statusLower.includes("user acceptance testing") ||
+    statusLower.includes("qa in progress") ||
+    statusLower.includes("qa approved") ||
+    statusLower.includes("code review") ||
+    statusLower.includes("integration")
+  ) {
+    return 0.75;
+  }
+
+  if (
+    statusLower.includes("ready for qa") ||
+    statusLower === "ready for qa" ||
+    statusLower.includes("ready for testing") ||
+    statusLower.includes("qa ready") ||
+    statusLower.includes("pending qa") ||
+    statusLower.includes("qa failed") ||
+    statusLower.includes("uat failed")
+  ) {
+    return 0.5;
+  }
+
+  if (
+    statusLower.includes("in progress") ||
+    statusLower === "in progress" ||
+    statusLower === "inprogress" ||
+    statusLower.includes("in development")
+  ) {
+    return 0.5;
+  }
+
+  if (
+    statusLower.includes("ready to develop") ||
+    statusLower === "ready to develop" ||
+    statusLower.includes("ready for development")
+  ) {
+    return 0.25;
+  }
+
+  return 0.0;
+}
+
 export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
   const { selectedConfig } = useJiraConfig();
   const [loading, setLoading] = useState(false);
@@ -207,18 +268,6 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
     };
   }, [isOpen, selectedConfig?.id, fetchReport, reportData]);
 
-  const handleRefresh = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    setReportData(null);
-    setError(null);
-    setProgress({ current: 0, total: 0 });
-    setLoading(true);
-    isFetchingRef.current = false;
-    fetchReport();
-  };
-
   const calculateSummary = () => {
     if (!reportData || reportData.epics.length === 0) {
       return null;
@@ -228,8 +277,9 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
     let completedIssues = 0;
     let totalStoryPoints = 0;
     let completedStoryPoints = 0;
-    let weightedProgressSum = 0;
+    let totalWeightedSum = 0;
     const statusCounts: Record<string, number> = {};
+    const statusPoints: Record<string, number> = {};
 
     for (const epic of reportData.epics) {
       totalIssues += epic.progress.total_issues;
@@ -237,12 +287,12 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
       totalStoryPoints += epic.progress.total_story_points;
       completedStoryPoints += epic.progress.completed_story_points;
 
-      const epicWeight = epic.progress.total_issues;
-      const epicWeightedPercent = epic.progress.percent_by_points;
-      weightedProgressSum += epicWeightedPercent * epicWeight;
-
-      const status = epic.epic.status;
-      statusCounts[status] = (statusCounts[status] || 0) + 1;
+      for (const [status, statusData] of Object.entries(epic.breakdown_by_status)) {
+        const statusWeight = getStatusCompletionPercentage(status);
+        totalWeightedSum += statusData.count * statusWeight;
+        statusCounts[status] = (statusCounts[status] || 0) + statusData.count;
+        statusPoints[status] = (statusPoints[status] || 0) + statusData.story_points;
+      }
     }
 
     const percentByCount =
@@ -250,7 +300,7 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
 
     const weightedPercent =
       totalIssues > 0
-        ? Math.round(weightedProgressSum / totalIssues)
+        ? Math.round((totalWeightedSum / totalIssues) * 100)
         : 0;
 
     return {
@@ -262,6 +312,7 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
       percentByCount,
       percentByPoints: weightedPercent,
       statusCounts,
+      statusPoints,
     };
   };
 
@@ -389,7 +440,7 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
-              >
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -542,19 +593,28 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
               </div>
               {summary.statusCounts && Object.keys(summary.statusCounts).length > 0 && (
                 <div className="mt-4 pt-4 border-t border-[var(--bg-highlight)]">
-                  <div className="text-xs text-[var(--fg-muted)] mb-2">Epic Status Breakdown</div>
+                  <div className="text-xs text-[var(--fg-muted)] mb-2">Issue Status Breakdown</div>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(summary.statusCounts)
                       .sort(([, a], [, b]) => b - a)
-                      .map(([status, count]) => (
-                        <div
-                          key={status}
-                          className="px-2 py-1 bg-[var(--bg)] rounded text-xs text-[var(--fg)] border border-[var(--bg-highlight)]"
-                        >
-                          <span className="text-[var(--fg-muted)]">{status}:</span>{" "}
-                          <span className="font-medium">{count}</span>
-                        </div>
-                      ))}
+                      .map(([status, count]) => {
+                        const points = summary.statusPoints?.[status] || 0;
+                        return (
+                          <div
+                            key={status}
+                            className="px-2 py-1 bg-[var(--bg)] rounded text-xs text-[var(--fg)] border border-[var(--bg-highlight)]"
+                          >
+                            <span className="text-[var(--fg-muted)]">{status}:</span>{" "}
+                            <span className="font-medium">{count}</span>
+                            {points > 0 && (
+                              <>
+                                {" "}
+                                <span className="text-[var(--fg-muted)]">- {points} pts</span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -565,7 +625,8 @@ export function EpicReportModal({ isOpen, onClose }: EpicReportModalProps) {
             <div className="flex items-center justify-center py-12">
               <div className="text-center w-full max-w-md">
                 <div className="relative inline-block mb-4 w-8 h-8">
-                  <style dangerouslySetInnerHTML={{ __html: `
+                  <style dangerouslySetInnerHTML={{
+                    __html: `
                     @keyframes spin-trail {
                       0% { transform: rotate(0deg); }
                       100% { transform: rotate(360deg); }

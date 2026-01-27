@@ -93,7 +93,7 @@ function findFields(fields: JiraField[], configId: string): FieldMappings {
       if (match) {
         const existingCache = cacheStore.get(configId);
         if (!existingCache || existingCache.fieldMappings[search.key] !== match.id) {
-          console.log(`[Cache] Found ${search.key}: ${match.id} - ${match.name}`);
+        console.log(`[Cache] Found ${search.key}: ${match.id} - ${match.name}`);
         }
         fieldId = match.id;
         break;
@@ -109,9 +109,9 @@ function findFields(fields: JiraField[], configId: string): FieldMappings {
       if (fallback) {
         const existingCache = cacheStore.get(configId);
         if (!existingCache || existingCache.fieldMappings[search.key] !== fallback.id) {
-          console.log(
-            `[Cache] Found ${search.key} (fallback): ${fallback.id} - ${fallback.name}`
-          );
+        console.log(
+          `[Cache] Found ${search.key} (fallback): ${fallback.id} - ${fallback.name}`
+        );
         }
         fieldId = fallback.id;
       }

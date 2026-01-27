@@ -365,10 +365,10 @@ export function ChatContainer() {
                 <polyline points="10 9 9 9 8 9" />
               </svg>
             </button>
-            <CSVUpload
-              onUploadComplete={handleCSVUpload}
-              disabled={attachmentDisabled}
-            />
+          <CSVUpload
+            onUploadComplete={handleCSVUpload}
+            disabled={attachmentDisabled}
+          />
           </>
         }
       />

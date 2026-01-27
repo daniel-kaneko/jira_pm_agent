@@ -82,6 +82,67 @@ function sortStatuses(statuses: string[]): string[] {
 
 const PREVIEW_COUNT = 3;
 
+/**
+ * Get completion percentage for a status based on weighted story points calculation.
+ * @param status - The status name (e.g., "In Progress", "UAT")
+ * @returns Completion percentage as a decimal (0.0 to 1.0)
+ */
+function getStatusCompletionPercentage(status: string): number {
+  const statusLower = status.toLowerCase().trim();
+
+  if (statusLower.includes("done") || statusLower.includes("conclu")) {
+    return 1.0;
+  }
+
+  if (
+    statusLower.includes("uat") ||
+    statusLower === "uat" ||
+    statusLower.includes("user acceptance testing") ||
+    statusLower.includes("qa in progress")
+  ) {
+    return 0.75;
+  }
+
+  if (
+    statusLower.includes("ready for qa") ||
+    statusLower === "ready for qa" ||
+    statusLower.includes("ready for testing") ||
+    statusLower.includes("qa ready")
+  ) {
+    return 0.5;
+  }
+
+  if (
+    statusLower.includes("in progress") ||
+    statusLower === "in progress" ||
+    statusLower === "inprogress" ||
+    statusLower.includes("in development")
+  ) {
+    return 0.5;
+  }
+
+  if (
+    statusLower.includes("ready to develop") ||
+    statusLower === "ready to develop" ||
+    statusLower.includes("ready for development")
+  ) {
+    return 0.25;
+  }
+
+  return 0.0;
+}
+
+/**
+ * Calculate weighted completed story points for a status.
+ * @param status - The status name
+ * @param totalPoints - Total story points in this status
+ * @returns Weighted completed story points
+ */
+function calculateWeightedCompletedPoints(status: string, totalPoints: number): number {
+  const completionPercentage = getStatusCompletionPercentage(status);
+  return totalPoints * completionPercentage;
+}
+
 export function EpicProgressCard({ data }: EpicProgressCardProps) {
   const [openStatuses, setOpenStatuses] = useState<Set<string>>(
     () => new Set(Object.keys(data.breakdown_by_status))
@@ -119,10 +180,7 @@ export function EpicProgressCard({ data }: EpicProgressCardProps) {
     });
   };
 
-  const mainPercent =
-    progress.total_story_points > 0
-      ? progress.percent_by_points
-      : progress.percent_by_count;
+  const mainPercent = progress.percent_by_points;
 
   return (
     <div className="border border-[var(--bg-highlight)] rounded-lg overflow-hidden">
@@ -176,7 +234,9 @@ export function EpicProgressCard({ data }: EpicProgressCardProps) {
           <div>
             <div className="text-[var(--fg-muted)]">Story Points</div>
             <div className="font-medium text-[var(--fg)]">
-              <span className="text-[var(--green)]">{progress.completed_story_points}</span>
+              <span className="text-[var(--green)]">
+                {Math.round(progress.completed_story_points * 100) / 100}
+              </span>
               <span className="text-[var(--fg-muted)]"> / {progress.total_story_points}</span>
             </div>
           </div>
@@ -214,7 +274,13 @@ export function EpicProgressCard({ data }: EpicProgressCardProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[var(--fg-muted)]">
-                    {statusData.story_points} pts
+                    {statusData.story_points > 0
+                      ? `${Math.round(calculateWeightedCompletedPoints(status, statusData.story_points) * 100) / 100} / ${statusData.story_points} pts`
+                      : `0 / 0 pts`}
+                  </span>
+                  <span className="w-px h-4 bg-[var(--bg-highlight)]" />
+                  <span className="text-xs font-medium text-[var(--fg)]">
+                    {Math.round(getStatusCompletionPercentage(status) * 100)}%
                   </span>
                   <svg
                     className={`w-4 h-4 text-[var(--fg-muted)] transition-transform ${isOpen ? "rotate-180" : ""

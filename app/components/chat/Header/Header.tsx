@@ -19,7 +19,9 @@ export function Header({ title = "task-o-matic", children }: HeaderProps) {
           <span className="text-[var(--fg)]">{title}</span>
           <span className="text-[var(--fg-muted)]">[+]</span>
         </div>
-        {children && <div className="flex items-center">{children}</div>}
+        <div className="flex items-center gap-2">
+          {children && <div className="flex items-center">{children}</div>}
+        </div>
       </div>
     </header>
   );

@@ -17,6 +17,60 @@ type ListEpicsResult = ToolResultMap["list_epics"];
 const DONE_CATEGORIES = ["done"];
 
 /**
+ * Get completion percentage for a status based on weighted story points calculation.
+ * @param status - The status name (e.g., "In Progress", "UAT")
+ * @param statusCategory - The Jira status category key (e.g., "done", "indeterminate")
+ * @returns Completion percentage as a decimal (0.0 to 1.0)
+ */
+function getStatusCompletionPercentage(
+  status: string,
+  statusCategory: string
+): number {
+  const statusLower = status.toLowerCase().trim();
+
+  if (statusCategory === "done") {
+    return 1.0;
+  }
+
+  if (
+    statusLower.includes("uat") ||
+    statusLower === "uat" ||
+    statusLower.includes("user acceptance testing") ||
+    statusLower.includes("qa in progress")
+  ) {
+    return 0.75;
+  }
+
+  if (
+    statusLower.includes("ready for qa") ||
+    statusLower === "ready for qa" ||
+    statusLower.includes("ready for testing") ||
+    statusLower.includes("qa ready")
+  ) {
+    return 0.5;
+  }
+
+  if (
+    statusLower.includes("in progress") ||
+    statusLower === "in progress" ||
+    statusLower === "inprogress" ||
+    statusLower.includes("in development")
+  ) {
+    return 0.5;
+  }
+
+  if (
+    statusLower.includes("ready to develop") ||
+    statusLower === "ready to develop" ||
+    statusLower.includes("ready for development")
+  ) {
+    return 0.25;
+  }
+
+  return 0.0;
+}
+
+/**
  * List all epics in the project.
  * @param config - Jira project configuration.
  * @param args - Tool arguments with optional status filter and limit.
@@ -27,7 +81,7 @@ export async function handleListEpics(
   args: Record<string, unknown>
 ): Promise<ListEpicsResult> {
   const status = args.status as string[] | undefined;
-  const limit = (args.limit as number) ?? 50;
+  const maxEpics = (args.limit as number) ?? 1000;
 
   const projectKey = config.projectKey;
   const client = createJiraClient(config);
@@ -39,33 +93,60 @@ export async function handleListEpics(
   }
   jql += " ORDER BY created DESC";
 
-  const requestBody = {
-    jql,
-    fields: ["summary", "status", "assignee"],
-    maxResults: limit,
-  };
+  const allEpics: Array<{
+    key: string;
+    key_link: string;
+    summary: string;
+    status: string;
+    assignee: string | null;
+  }> = [];
 
-  const searchResponse = await client.searchByJQL(requestBody);
-  const rawIssues =
-    (searchResponse.issues as Array<Record<string, unknown>>) || [];
+  let nextPageToken: string | undefined;
+  const maxResults = 100;
+  let pageCount = 0;
+  const maxPages = Math.ceil(maxEpics / maxResults);
 
-  const epics = rawIssues.map((issue) => {
-    const fields = issue.fields as Record<string, unknown>;
-    const statusObj = fields.status as Record<string, unknown>;
-    const assigneeData = fields.assignee as Record<string, unknown> | null;
-
-    return {
-      key: issue.key as string,
-      key_link: `[${issue.key}](${config.baseUrl}/browse/${issue.key})`,
-      summary: fields.summary as string,
-      status: (statusObj?.name as string) || "Unknown",
-      assignee: (assigneeData?.displayName as string) || null,
+  while (pageCount < maxPages) {
+    const requestBody: Record<string, unknown> = {
+      jql,
+      fields: ["summary", "status", "assignee"],
+      maxResults,
     };
-  });
+    if (nextPageToken) {
+      requestBody.nextPageToken = nextPageToken;
+    }
+
+    const searchResponse = await client.searchByJQL(requestBody);
+    const rawIssues =
+      (searchResponse.issues as Array<Record<string, unknown>>) || [];
+
+    for (const issue of rawIssues) {
+      const fields = issue.fields as Record<string, unknown>;
+      const statusObj = fields.status as Record<string, unknown>;
+      const assigneeData = fields.assignee as Record<string, unknown> | null;
+
+      allEpics.push({
+        key: issue.key as string,
+        key_link: `[${issue.key}](${config.baseUrl}/browse/${issue.key})`,
+        summary: fields.summary as string,
+        status: (statusObj?.name as string) || "Unknown",
+        assignee: (assigneeData?.displayName as string) || null,
+      });
+    }
+
+    const isLast = searchResponse.isLast as boolean;
+    nextPageToken = searchResponse.nextPageToken as string | undefined;
+
+    if (isLast || rawIssues.length === 0 || allEpics.length >= maxEpics) {
+      break;
+    }
+
+    pageCount++;
+  }
 
   return {
-    total_epics: epics.length,
-    epics,
+    total_epics: allEpics.length,
+    epics: allEpics.slice(0, maxEpics),
   };
 }
 
@@ -121,10 +202,16 @@ export async function handleGetEpicProgress(
     const points = issue.story_points || 0;
     totalStoryPoints += points;
 
+    const completionPercentage = getStatusCompletionPercentage(
+      issue.status,
+      issue.statusCategory
+    );
+    const weightedPoints = points * completionPercentage;
+    completedStoryPoints += weightedPoints;
+
     const isDone = DONE_CATEGORIES.includes(issue.statusCategory);
     if (isDone) {
       completedIssues++;
-      completedStoryPoints += points;
     }
 
     if (!breakdownByStatus[issue.status]) {
@@ -157,9 +244,21 @@ export async function handleGetEpicProgress(
 
   const percentByCount =
     totalIssues > 0 ? Math.round((completedIssues / totalIssues) * 100) : 0;
+  
+  let weightedCompletedIssues = 0;
+  if (totalIssues > 0) {
+    for (const issue of childIssues) {
+      const completionPercentage = getStatusCompletionPercentage(
+        issue.status,
+        issue.statusCategory
+      );
+      weightedCompletedIssues += completionPercentage;
+    }
+  }
+  
   const percentByPoints =
-    totalStoryPoints > 0
-      ? Math.round((completedStoryPoints / totalStoryPoints) * 100)
+    totalIssues > 0
+      ? Math.round((weightedCompletedIssues / totalIssues) * 100)
       : 0;
 
   const finalBreakdown: GetEpicProgressResult["breakdown_by_status"] = {};

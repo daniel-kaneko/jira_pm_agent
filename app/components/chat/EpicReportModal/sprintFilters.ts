@@ -76,9 +76,9 @@ export function getFilteredSprints(
 /**
  * Extract and filter sprint names from epic issues.
  */
-export function extractSprintNamesFromEpics(
-  epics: Array<{ breakdown_by_status: Record<string, { issues: Array<{ sprint?: string | null }> }> }>,
-  filterFn?: (issue: { sprint?: string | null }) => boolean
+export function extractSprintNamesFromEpics<T extends { sprint?: string | null }>(
+  epics: Array<{ breakdown_by_status: Record<string, { issues: Array<T> }> }>,
+  filterFn?: (issue: T) => boolean
 ): Set<string> {
   const sprintNames = new Set<string>();
   for (const epic of epics) {

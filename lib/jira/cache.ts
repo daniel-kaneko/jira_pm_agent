@@ -163,7 +163,7 @@ export async function refreshCache(configId: string): Promise<CacheData> {
 
   const [allSprints, fields, versions, components, priorities] =
     await Promise.all([
-      client.listSprints(boardId, "all", 50),
+      client.listSprints(boardId, "all", 100),
       client.getFields(),
       client.getVersions(config.projectKey),
       client.getComponents(config.projectKey),
@@ -177,8 +177,9 @@ export async function refreshCache(configId: string): Promise<CacheData> {
   );
 
   const cache: CacheData = {
+    // Include active, closed, and future sprints for timeline view
     sprints: allSprints.filter(
-      (sprint) => sprint.state === "active" || sprint.state === "closed"
+      (sprint) => sprint.state === "active" || sprint.state === "closed" || sprint.state === "future"
     ),
     statuses,
     teamMembers,

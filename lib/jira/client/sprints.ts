@@ -43,8 +43,9 @@ export async function listSprints(
   maxResults = 10
 ): Promise<JiraSprint[]> {
   const stateParam = state === "all" ? "" : `state=${state}&`;
+  // Increase maxResults to 200 to handle more sprints, especially future ones
   const data = await jiraFetch<Record<string, unknown>>(
-    `/rest/agile/1.0/board/${boardId}/sprint?${stateParam}maxResults=100`,
+    `/rest/agile/1.0/board/${boardId}/sprint?${stateParam}maxResults=200`,
     ctx
   );
 

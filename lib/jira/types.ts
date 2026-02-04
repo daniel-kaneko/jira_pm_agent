@@ -203,6 +203,8 @@ export interface ActivityChange {
   to: string | null;
   changed_by: string;
   changed_at: string;
+  assignee: string | null;
+  story_points: number | null;
 }
 
 export interface IssueToCreate {
@@ -258,7 +260,7 @@ export interface ListSprintsArgs {
   limit?: number;
 }
 
-export interface GetContextArgs {}
+export interface GetContextArgs { }
 
 export interface QueryCSVArgs {
   filters?: Record<string, string>;

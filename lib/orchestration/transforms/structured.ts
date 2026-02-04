@@ -29,6 +29,8 @@ interface GetActivityResult {
     to: string | null;
     changed_by: string;
     changed_at: string;
+    assignee: string | null;
+    story_points: number | null;
   }>;
 }
 

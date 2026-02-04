@@ -175,13 +175,17 @@ export async function searchByJQL(
  */
 export async function getSprintChangelogs(
   ctx: ClientContext,
-  sprintIds: number[],
-  sinceDate: Date
+  sprintIds: number[] | undefined,
+  sinceDate: Date,
+  storyPointsFieldId?: string | null,
+  untilDate?: Date,
+  projectKey?: string
 ): Promise<
   Array<{
     key: string;
     summary: string;
     assignee: string | null;
+    story_points: number | null;
     changelog: Array<{
       author: string;
       created: string;
@@ -193,14 +197,30 @@ export async function getSprintChangelogs(
     }>;
   }>
 > {
-  const sprintClause = sprintIds.map((id) => `sprint = ${id}`).join(" OR ");
   const sinceDateStr = sinceDate.toISOString().split("T")[0];
-  const jql = `(${sprintClause}) AND updated >= "${sinceDateStr}" ORDER BY updated DESC`;
+  const untilDateStr = untilDate ? untilDate.toISOString().split("T")[0] : null;
+
+  let jql: string;
+  if (sprintIds && sprintIds.length > 0) {
+    const sprintClause = sprintIds.map((id) => `sprint = ${id}`).join(" OR ");
+    jql = `(${sprintClause}) AND updated >= "${sinceDateStr}"`;
+  } else if (projectKey) {
+    jql = `project = ${projectKey} AND updated >= "${sinceDateStr}"`;
+  } else {
+    jql = `updated >= "${sinceDateStr}"`;
+  }
+
+  if (untilDateStr) {
+    jql += ` AND updated <= "${untilDateStr}"`;
+  }
+
+  jql += " ORDER BY updated DESC";
 
   const allIssues: Array<{
     key: string;
     summary: string;
     assignee: string | null;
+    story_points: number | null;
     changelog: Array<{
       author: string;
       created: string;
@@ -218,9 +238,13 @@ export async function getSprintChangelogs(
   while (true) {
     let searchData: Record<string, unknown>;
     try {
+      const fieldsList: string[] = ["summary", "assignee"];
+      if (storyPointsFieldId) {
+        fieldsList.push(storyPointsFieldId);
+      }
       const requestBody: Record<string, unknown> = {
         jql,
-        fields: ["summary", "assignee"],
+        fields: fieldsList,
         maxResults,
       };
       if (nextPageToken) {
@@ -256,7 +280,10 @@ export async function getSprintChangelogs(
           (changelogData?.values as Array<Record<string, unknown>>) || [];
 
         const filteredHistories = histories
-          .filter((history) => new Date(history.created as string) >= sinceDate)
+          .filter((history) => {
+            const historyDate = new Date(history.created as string);
+            return historyDate >= sinceDate && (!untilDate || historyDate <= untilDate);
+          })
           .map((history) => {
             const items =
               (history.items as Array<Record<string, unknown>>) || [];
@@ -275,10 +302,14 @@ export async function getSprintChangelogs(
 
         if (filteredHistories.length > 0) {
           const assigneeData = fields.assignee as Record<string, unknown> | null;
+          const storyPoints = storyPointsFieldId
+            ? (fields[storyPointsFieldId] as number) || null
+            : null;
           allIssues.push({
             key: issueKey,
             summary: fields.summary as string,
             assignee: (assigneeData?.displayName as string) || null,
+            story_points: storyPoints,
             changelog: filteredHistories,
           });
         }

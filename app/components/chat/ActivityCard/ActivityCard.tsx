@@ -19,6 +19,8 @@ export interface ActivityChange {
   to: string | null;
   changed_by: string;
   changed_at: string;
+  assignee: string | null;
+  story_points: number | null;
 }
 
 export interface ActivityListData {
@@ -102,6 +104,8 @@ function exportActivity(changes: ActivityChange[], period: string): void {
     "To",
     "Changed By",
     "Changed At",
+    "Assignee",
+    "Story Points",
   ];
   const rows = changes.map((change) => [
     change.issue_key,
@@ -111,6 +115,8 @@ function exportActivity(changes: ActivityChange[], period: string): void {
     change.to || "",
     change.changed_by,
     change.changed_at,
+    change.assignee || "",
+    change.story_points?.toString() || "",
   ]);
   const csv = rowsToCsv(headers, rows);
   downloadCsv(csv, `activity-${period.replace(/\s+/g, "-")}.csv`);

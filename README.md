@@ -203,7 +203,6 @@ When tracking status changes (via `get_activity`), results are displayed with:
 - **🏷️ Filters**: Multi-select for "To Status", "Changed By", and "Date"
 - **📥 CSV Export**: Download activity log
 - **📅 Date Awareness**: AI knows the current date and timezone for accurate queries
-- **⚠️ 7-day limit**: Activity requests over 7 days return an error to prevent token overuse
 
 ## Chat Features
 

@@ -40,8 +40,13 @@ export function createJiraClient(config: JiraProjectConfig) {
     moveIssuesToSprint: (sprintId: number, issueKeys: string[]) =>
       sprints.moveIssuesToSprint(ctx, sprintId, issueKeys),
 
-    getSprintChangelogs: (sprintIds: number[], sinceDate: Date) =>
-      sprints.getSprintChangelogs(ctx, sprintIds, sinceDate),
+    getSprintChangelogs: (
+      sprintIds: number[] | undefined,
+      sinceDate: Date,
+      storyPointsFieldId?: string | null,
+      untilDate?: Date,
+      projectKey?: string
+    ) => sprints.getSprintChangelogs(ctx, sprintIds, sinceDate, storyPointsFieldId, untilDate, projectKey),
 
     searchByJQL: (requestBody: Record<string, unknown>) =>
       sprints.searchByJQL(ctx, requestBody),

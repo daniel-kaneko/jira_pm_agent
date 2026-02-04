@@ -96,11 +96,11 @@ export const lightTools: ToolDefinition[] = [
     type: "function",
     function: {
       name: TOOL_NAMES.GET_ACTIVITY,
-      description: "Get status changes in a date range.",
+      description: "Get status changes in a date range. Queries all issues in project if sprint_ids not provided.",
       parameters: {
         type: "object",
         properties: {
-          sprint_ids: { type: "array", description: "sprint IDs" },
+          sprint_ids: { type: "array", description: "optional: sprint IDs to filter by" },
           since: { type: "string", description: "start date YYYY-MM-DD" },
           until: {
             type: "string",
@@ -404,25 +404,25 @@ Returns: { key, summary, description, status, assignee, comments: [...] }`,
     type: "function",
     function: {
       name: TOOL_NAMES.GET_ACTIVITY,
-      description: `Get status changes for issues in a sprint within a date range (max 7 days).
+      description: `Get status changes for issues within a date range. Can filter by sprint or query all issues in the project.
 
 Examples:
-- get_activity(since: "2025-12-31") - changes from Dec 31 to today
-- get_activity(since: "2025-12-25", until: "2025-12-31") - changes Dec 25-31
-- get_activity(sprint_ids: [3625], since: "2025-12-23") - changes since Dec 23
+- get_activity(since: "2025-12-31") - all changes from Dec 31 to today (all issues in project)
+- get_activity(since: "2025-12-25", until: "2025-12-31") - changes Dec 25-31 (all issues)
+- get_activity(sprint_ids: [3625], since: "2025-12-23") - changes in specific sprint(s)
 - get_activity(since: "2025-12-01", to_status: "Concluído") - what moved to Done
 - get_activity(since: "2025-12-20", assignees: ["John Doe"]) - John's changes
 
-Activity UI already lists all issues with their changes and details, so just summarize what happened in the period.
+When sprint_ids is not provided, queries all issues in the project. Activity UI already lists all issues with their changes and details, so just summarize what happened in the period.
 
-Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, changed_at}] }`,
+Returns: { period, changes: [{issue_key, summary, field, from, to, changed_by, changed_at, assignee, story_points}] }`,
       parameters: {
         type: "object",
         properties: {
           sprint_ids: {
             type: "array",
             description:
-              "Sprint IDs (defaults to active sprint if not provided)",
+              "Optional: Sprint IDs to filter by. If not provided, queries all issues in the project.",
           },
           since: {
             type: "string",

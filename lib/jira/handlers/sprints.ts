@@ -4,7 +4,7 @@
 
 import { createJiraClient } from "../client";
 import { getBoardId } from "../config";
-import { getCachedTeamMembers, getCachedSprints } from "../cache";
+import { getCachedTeamMembers, getCachedSprints, getStoryPointsFieldId } from "../cache";
 import { resolveName, validateSprintIds, parseSinceDate } from "../executor";
 import type { JiraProjectConfig, ActivityChange } from "../types";
 
@@ -77,32 +77,25 @@ export async function handleGetActivity(
 
   const boardSprints = await getCachedSprints(config.id);
 
-  if (!sprint_ids || sprint_ids.length === 0) {
-    const activeSprint = boardSprints.find((s) => s.state === "active");
-    if (!activeSprint) {
-      throw new Error("No active sprint found. Please specify sprint_ids.");
-    }
-    sprint_ids = [activeSprint.id];
-  } else {
+  if (sprint_ids && sprint_ids.length > 0) {
     validateSprintIds(sprint_ids, boardSprints);
   }
 
   const sinceDate = parseSinceDate(since);
   const untilDate = until ? parseSinceDate(until) : new Date();
 
-  const daysDiff = Math.ceil(
-    (untilDate.getTime() - sinceDate.getTime()) / (1000 * 60 * 60 * 24)
-  );
-  if (daysDiff > 7) {
-    throw new Error(
-      `Activity requests are limited to 7 days maximum (you requested ${daysDiff} days). Please narrow your date range.`
-    );
-  }
-
-  const [cachedTeam, issuesWithChangelogs] = await Promise.all([
+  const [cachedTeam, storyPointsFieldId] = await Promise.all([
     getCachedTeamMembers(config.id),
-    client.getSprintChangelogs(sprint_ids, sinceDate),
+    getStoryPointsFieldId(config.id),
   ]);
+
+  const issuesWithChangelogs = await client.getSprintChangelogs(
+    sprint_ids,
+    sinceDate,
+    storyPointsFieldId,
+    untilDate,
+    config.projectKey
+  );
 
   const resolvedAssignees = assignees?.map((name) =>
     resolveName(name, cachedTeam).toLowerCase()
@@ -137,6 +130,8 @@ export async function handleGetActivity(
           to: item.to,
           changed_by: historyEntry.author,
           changed_at: historyEntry.created,
+          assignee: issue.assignee,
+          story_points: issue.story_points,
         });
       }
     }
@@ -153,7 +148,7 @@ export async function handleGetActivity(
       until: untilDate.toISOString().split("T")[0],
     },
     filters_applied: {
-      sprint_ids,
+      sprint_ids: sprint_ids || [],
       to_status: to_status || null,
       assignees: assignees || null,
     },

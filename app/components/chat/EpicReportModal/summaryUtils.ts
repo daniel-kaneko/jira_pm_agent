@@ -34,6 +34,7 @@ export function calculateEpicSummary(
     let epicHasMatchingIssues = false;
     let epicTotalIssues = 0;
     let epicCompletedIssues = 0;
+    let epicWeightedSum = 0;
     const epicStatusCounts: Record<string, number> = {};
     const epicStatusPoints: Record<string, number> = {};
 
@@ -53,7 +54,7 @@ export function calculateEpicSummary(
         0
       );
 
-      totalWeightedSum += filteredIssues.length * statusWeight;
+      epicWeightedSum += filteredIssues.length * statusWeight;
       epicStatusCounts[status] = (epicStatusCounts[status] || 0) + filteredIssues.length;
       epicStatusPoints[status] = (epicStatusPoints[status] || 0) + filteredStoryPoints;
 
@@ -66,6 +67,7 @@ export function calculateEpicSummary(
       totalEpics++;
       totalIssues += epicTotalIssues;
       completedIssues += epicCompletedIssues;
+      totalWeightedSum += epicWeightedSum;
 
       for (const status of Object.keys(epicStatusCounts)) {
         statusCounts[status] = (statusCounts[status] || 0) + epicStatusCounts[status];

@@ -226,8 +226,8 @@ export async function handleGetEpicProgress(
     const weightedPoints = points * completionPercentage;
     completedStoryPoints += weightedPoints;
 
-    const isDone = DONE_CATEGORIES.includes(issue.statusCategory) || 
-                   issue.status.toLowerCase().trim() === "complete";
+    const isDone = DONE_CATEGORIES.includes(issue.statusCategory) ||
+      issue.status.toLowerCase().trim() === "complete";
     if (isDone) {
       completedIssues++;
     }
@@ -265,7 +265,7 @@ export async function handleGetEpicProgress(
 
   const percentByCount =
     totalIssues > 0 ? Math.round((completedIssues / totalIssues) * 100) : 0;
-  
+
   let weightedCompletedIssues = 0;
   if (totalIssues > 0) {
     for (const issue of childIssues) {
@@ -276,7 +276,7 @@ export async function handleGetEpicProgress(
       weightedCompletedIssues += completionPercentage;
     }
   }
-  
+
   const percentByPoints =
     totalIssues > 0
       ? Math.round((weightedCompletedIssues / totalIssues) * 100)
@@ -373,7 +373,7 @@ async function fetchIssuesByJQL(
 
     for (const issue of issues) {
       const issueFields = issue.fields as Record<string, unknown>;
-      
+
       if (process.env.NODE_ENV === "development" && issues.indexOf(issue) === 0) {
         console.log("[Epic Handler] Sprint field ID being used:", sprintFieldId);
         console.log("[Epic Handler] Sample issue fields:", Object.keys(issueFields));
@@ -399,7 +399,7 @@ async function fetchIssuesByJQL(
           console.log(`[Epic Handler] Sprint field not discovered`);
         }
       }
-      
+
       const statusObj = issueFields.status as Record<string, unknown>;
       const statusCategory = statusObj?.statusCategory as Record<
         string,
@@ -413,14 +413,14 @@ async function fetchIssuesByJQL(
       const fixVersions = fixVersionsData.map((version) => (version.name as string) || "").filter(Boolean);
       const priorityData = issueFields.priority as Record<string, unknown> | null;
       const priority = priorityData ? (priorityData.name as string) || null : null;
-      
+
       if (priority && priority.toLowerCase() === "unknown") {
         continue;
       }
-      
+
       let sprint: string | null = null;
       const sprintField = sprintFieldId ? issueFields[sprintFieldId] : undefined;
-      
+
       if (sprintField !== null && sprintField !== undefined) {
         if (Array.isArray(sprintField)) {
           const sprintArray = sprintField as Array<Record<string, unknown>>;

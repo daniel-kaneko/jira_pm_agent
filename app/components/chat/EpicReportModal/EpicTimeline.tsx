@@ -124,12 +124,6 @@ export function EpicTimeline({
     });
   };
 
-  const getProgressColor = (progress: number): string => {
-    if (progress >= 100) return "var(--green)";
-    if (progress >= 50) return "var(--yellow)";
-    return "var(--fg-muted)";
-  };
-
   const getSprintStateColor = (state: string): string => {
     if (state === "active") return "var(--blue)";
     if (state === "closed") return "var(--fg-muted)";
@@ -232,8 +226,8 @@ export function EpicTimeline({
               Sprints
             </div>
 
-            <div 
-              ref={headerScrollRef} 
+            <div
+              ref={headerScrollRef}
               className="sticky top-0 z-20 flex-shrink-0 overflow-x-auto pb-2 bg-[var(--bg-highlight)]"
             >
               <div className="flex gap-2" style={{ minWidth: `${sortedSprints.length * 140}px` }}>
@@ -283,7 +277,7 @@ export function EpicTimeline({
                 <div className="space-y-1">
                   {epicSprintData.map((data, epicIndex) => {
                     const isExpanded = expandedEpics.has(data.epic.epic.key);
-                    const progressColor = getProgressColor(data.progress);
+                    const progressColor = "var(--green)";
                     return (
                       <div key={data.epic.epic.key}>
                         <div
@@ -323,7 +317,7 @@ export function EpicTimeline({
                         {isExpanded &&
                           data.issues.map((issue) => {
                             const issueSprintColor = issue.sprintId
-                              ? getProgressColor(data.progress)
+                              ? "var(--green)"
                               : "var(--fg-muted)";
                             return (
                               <div

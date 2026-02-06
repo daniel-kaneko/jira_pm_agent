@@ -171,6 +171,51 @@ export async function searchByJQL(
 }
 
 /**
+ * Retry a changelog fetch with exponential backoff for transient errors.
+ */
+async function fetchChangelogWithRetry<T>(
+  fn: () => Promise<T>,
+  issueKey: string,
+  maxRetries = 3
+): Promise<T | null> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isLastAttempt = attempt === maxRetries - 1;
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      
+      // Check if it's a retryable error
+      const isRetryable =
+        errorMessage.includes("timeout") ||
+        errorMessage.includes("429") ||
+        errorMessage.includes("rate limit") ||
+        errorMessage.includes("503") ||
+        errorMessage.includes("502") ||
+        errorMessage.includes("500");
+
+      if (!isRetryable || isLastAttempt) {
+        if (isLastAttempt) {
+          console.error(
+            `[Changelog] Failed after ${maxRetries} attempts for ${issueKey}:`,
+            errorMessage
+          );
+        }
+        return null;
+      }
+
+      const delay = 1000 * Math.pow(2, attempt);
+      console.log(
+        `[Changelog] Retrying ${issueKey} (attempt ${attempt + 1}/${maxRetries}) after ${delay}ms:`,
+        errorMessage
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  return null;
+}
+
+/**
  * Get changelog for issues in sprints since a date
  */
 export async function getSprintChangelogs(
@@ -266,59 +311,89 @@ export async function getSprintChangelogs(
 
     const issues = (searchData.issues as Array<Record<string, unknown>>) || [];
 
-    for (const issue of issues) {
-      const issueKey = issue.key as string;
-      const fields = issue.fields as Record<string, unknown>;
+    // Process issues in batches concurrently
+    const BATCH_SIZE = 15;
+    
+    for (let i = 0; i < issues.length; i += BATCH_SIZE) {
+      const batch = issues.slice(i, i + BATCH_SIZE);
+      const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(issues.length / BATCH_SIZE);
+      
+      console.log(
+        `[Changelog] Processing batch ${batchNumber}/${totalBatches} (${batch.length} issues)`
+      );
 
-      try {
-        const changelogData = await jiraFetch<Record<string, unknown>>(
-          `/rest/api/3/issue/${issueKey}/changelog?maxResults=100`,
-          ctx
+      const batchPromises = batch.map(async (issue) => {
+        const issueKey = issue.key as string;
+        const fields = issue.fields as Record<string, unknown>;
+
+        const changelogData = await fetchChangelogWithRetry(
+          () =>
+            jiraFetch<Record<string, unknown>>(
+              `/rest/api/3/issue/${issueKey}/changelog?maxResults=100`,
+              ctx,
+              { timeout: 20000 }
+            ),
+          issueKey
         );
 
-        const histories =
-          (changelogData?.values as Array<Record<string, unknown>>) || [];
-
-        const filteredHistories = histories
-          .filter((history) => {
-            const historyDate = new Date(history.created as string);
-            return historyDate >= sinceDate && (!untilDate || historyDate <= untilDate);
-          })
-          .map((history) => {
-            const items =
-              (history.items as Array<Record<string, unknown>>) || [];
-            return {
-              author:
-                ((history.author as Record<string, unknown>)
-                  ?.displayName as string) || "Unknown",
-              created: history.created as string,
-              items: items.map((item) => ({
-                field: item.field as string,
-                from: (item.fromString as string) || null,
-                to: (item["toString"] as string) || null,
-              })),
-            };
-          });
-
-        if (filteredHistories.length > 0) {
-          const assigneeData = fields.assignee as Record<string, unknown> | null;
-          const storyPoints = storyPointsFieldId
-            ? (fields[storyPointsFieldId] as number) || null
-            : null;
-          allIssues.push({
-            key: issueKey,
-            summary: fields.summary as string,
-            assignee: (assigneeData?.displayName as string) || null,
-            story_points: storyPoints,
-            changelog: filteredHistories,
-          });
+        if (!changelogData) {
+          return null;
         }
-      } catch (err) {
-        console.error(
-          `[Changelog] Failed to get changelog for ${issueKey}:`,
-          err
-        );
-      }
+
+        try {
+          const histories =
+            (changelogData?.values as Array<Record<string, unknown>>) || [];
+
+          const filteredHistories = histories
+            .filter((history) => {
+              const historyDate = new Date(history.created as string);
+              return historyDate >= sinceDate && (!untilDate || historyDate <= untilDate);
+            })
+            .map((history) => {
+              const items =
+                (history.items as Array<Record<string, unknown>>) || [];
+              return {
+                author:
+                  ((history.author as Record<string, unknown>)
+                    ?.displayName as string) || "Unknown",
+                created: history.created as string,
+                items: items.map((item) => ({
+                  field: item.field as string,
+                  from: (item.fromString as string) || null,
+                  to: (item["toString"] as string) || null,
+                })),
+              };
+            });
+
+          if (filteredHistories.length > 0) {
+            const assigneeData = fields.assignee as Record<string, unknown> | null;
+            const storyPoints = storyPointsFieldId
+              ? (fields[storyPointsFieldId] as number) || null
+              : null;
+            return {
+              key: issueKey,
+              summary: fields.summary as string,
+              assignee: (assigneeData?.displayName as string) || null,
+              story_points: storyPoints,
+              changelog: filteredHistories,
+            };
+          }
+          return null;
+        } catch (err) {
+          console.error(
+            `[Changelog] Error processing changelog for ${issueKey}:`,
+            err instanceof Error ? err.message : err
+          );
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      const validResults = batchResults.filter(
+        (result): result is NonNullable<typeof result> => result !== null
+      );
+      allIssues.push(...validResults);
     }
 
     const isLast = searchData.isLast as boolean;

@@ -386,7 +386,7 @@ export function ConfirmationCard({ action }: ConfirmationCardProps) {
 
         .issue-key {
           display: inline-block;
-          background: var(--accent, #3b82f6);
+          background: var(--blue, #2563eb);
           color: white;
           padding: 2px 6px;
           border-radius: 4px;

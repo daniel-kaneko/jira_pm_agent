@@ -324,13 +324,13 @@ export async function getSprintChangelogs(
       );
 
       const batchPromises = batch.map(async (issue) => {
-        const issueKey = issue.key as string;
-        const fields = issue.fields as Record<string, unknown>;
+      const issueKey = issue.key as string;
+      const fields = issue.fields as Record<string, unknown>;
 
         const changelogData = await fetchChangelogWithRetry(
           () =>
             jiraFetch<Record<string, unknown>>(
-              `/rest/api/3/issue/${issueKey}/changelog?maxResults=100`,
+          `/rest/api/3/issue/${issueKey}/changelog?maxResults=100`,
               ctx,
               { timeout: 20000 }
             ),
@@ -342,49 +342,49 @@ export async function getSprintChangelogs(
         }
 
         try {
-          const histories =
-            (changelogData?.values as Array<Record<string, unknown>>) || [];
+        const histories =
+          (changelogData?.values as Array<Record<string, unknown>>) || [];
 
-          const filteredHistories = histories
+        const filteredHistories = histories
             .filter((history) => {
               const historyDate = new Date(history.created as string);
               return historyDate >= sinceDate && (!untilDate || historyDate <= untilDate);
             })
-            .map((history) => {
-              const items =
-                (history.items as Array<Record<string, unknown>>) || [];
-              return {
-                author:
-                  ((history.author as Record<string, unknown>)
-                    ?.displayName as string) || "Unknown",
-                created: history.created as string,
-                items: items.map((item) => ({
-                  field: item.field as string,
-                  from: (item.fromString as string) || null,
-                  to: (item["toString"] as string) || null,
-                })),
-              };
-            });
+          .map((history) => {
+            const items =
+              (history.items as Array<Record<string, unknown>>) || [];
+            return {
+              author:
+                ((history.author as Record<string, unknown>)
+                  ?.displayName as string) || "Unknown",
+              created: history.created as string,
+              items: items.map((item) => ({
+                field: item.field as string,
+                from: (item.fromString as string) || null,
+                to: (item["toString"] as string) || null,
+              })),
+            };
+          });
 
-          if (filteredHistories.length > 0) {
-            const assigneeData = fields.assignee as Record<string, unknown> | null;
+        if (filteredHistories.length > 0) {
+          const assigneeData = fields.assignee as Record<string, unknown> | null;
             const storyPoints = storyPointsFieldId
               ? (fields[storyPointsFieldId] as number) || null
               : null;
             return {
-              key: issueKey,
-              summary: fields.summary as string,
-              assignee: (assigneeData?.displayName as string) || null,
+            key: issueKey,
+            summary: fields.summary as string,
+            assignee: (assigneeData?.displayName as string) || null,
               story_points: storyPoints,
-              changelog: filteredHistories,
+            changelog: filteredHistories,
             };
-          }
+        }
           return null;
-        } catch (err) {
-          console.error(
+      } catch (err) {
+        console.error(
             `[Changelog] Error processing changelog for ${issueKey}:`,
             err instanceof Error ? err.message : err
-          );
+        );
           return null;
         }
       });

@@ -35,52 +35,52 @@ export async function jiraFetch<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await fetch(url, {
+  const response = await fetch(url, {
       ...fetchOptions,
       signal: controller.signal,
-      headers: {
-        Authorization: getAuthHeader(ctx.email, ctx.apiToken),
-        "Content-Type": "application/json",
+    headers: {
+      Authorization: getAuthHeader(ctx.email, ctx.apiToken),
+      "Content-Type": "application/json",
         ...fetchOptions?.headers,
-      },
-    });
+    },
+  });
 
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      let errorDetails = "";
-      try {
-        const parsed = JSON.parse(errorBody);
-        if (parsed.errors) {
-          errorDetails = Object.entries(parsed.errors)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(", ");
-        } else if (parsed.errorMessages?.length) {
-          errorDetails = parsed.errorMessages.join(", ");
-        }
-      } catch {
-        errorDetails = errorBody.slice(0, 200);
+  if (!response.ok) {
+    const errorBody = await response.text();
+    let errorDetails = "";
+    try {
+      const parsed = JSON.parse(errorBody);
+      if (parsed.errors) {
+        errorDetails = Object.entries(parsed.errors)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(", ");
+      } else if (parsed.errorMessages?.length) {
+        errorDetails = parsed.errorMessages.join(", ");
       }
-      console.error(`[JiraFetch] ${response.status} at ${endpoint}`);
-      throw new Error(
-        `Jira API error: ${response.status} ${response.statusText}${
-          errorDetails ? ` - ${errorDetails}` : ""
-        }`
-      );
+    } catch {
+      errorDetails = errorBody.slice(0, 200);
     }
+    console.error(`[JiraFetch] ${response.status} at ${endpoint}`);
+    throw new Error(
+      `Jira API error: ${response.status} ${response.statusText}${
+        errorDetails ? ` - ${errorDetails}` : ""
+      }`
+    );
+  }
 
-    const contentLength = response.headers.get("content-length");
-    if (response.status === 204 || contentLength === "0") {
-      return {} as T;
-    }
+  const contentLength = response.headers.get("content-length");
+  if (response.status === 204 || contentLength === "0") {
+    return {} as T;
+  }
 
-    const text = await response.text();
-    if (!text) {
-      return {} as T;
-    }
+  const text = await response.text();
+  if (!text) {
+    return {} as T;
+  }
 
-    return JSON.parse(text) as T;
+  return JSON.parse(text) as T;
   } catch (error) {
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === "AbortError") {

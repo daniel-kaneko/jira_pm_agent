@@ -191,7 +191,7 @@ export function EpicTimeline({
                           {data.epic.epic.summary}
                         </div>
                       </div>
-                      <div className="flex-shrink-0 text-xs font-medium text-[var(--fg-muted)]">
+                      <div className="flex-shrink-0 text-xs font-medium text-[var(--fg-muted)] pr-3 w-16 text-right">
                         {data.progress}%
                       </div>
                     </div>
@@ -203,6 +203,9 @@ export function EpicTimeline({
                             className="flex items-center gap-3 h-12"
                             style={{ minHeight: `${rowHeight}px` }}
                           >
+                            <div className="flex-shrink-0 text-[var(--fg-muted)] w-4 text-center">
+                              →
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-xs font-medium text-[var(--fg)] truncate">
                                 {issue.key}
@@ -211,7 +214,7 @@ export function EpicTimeline({
                                 {issue.summary}
                               </div>
                             </div>
-                            <div className="flex-shrink-0 text-xs text-[var(--fg-muted)]">
+                            <div className="flex-shrink-0 text-xs text-[var(--fg-muted)] pr-3 w-16 text-right">
                               {issue.status}
                             </div>
                           </div>
